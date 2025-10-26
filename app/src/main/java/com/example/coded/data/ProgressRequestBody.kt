@@ -1,3 +1,5 @@
+package com.example.coded.data
+
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
 import okio.BufferedSink
