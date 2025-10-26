@@ -7,6 +7,7 @@ import com.google.firebase.auth.*
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,14 +73,16 @@ class AuthRepository {
                 .build()
             firebaseUser.updateProfile(profileUpdates).await()
 
-            // Create Firestore user document
+            // Create Firestore user document - Updated to match User class fields
             val user = User(
                 id = firebaseUser.uid,
-                mobile_number = mobileNumber,
-                full_name = fullName,
+                mobileNumber = mobileNumber,
+                fullName = fullName,
                 email = email,
                 token_balance = 5,
-                free_listings_used = 0
+                free_listings_used = 0,
+                created_at = Timestamp.now(),
+                updated_at = Timestamp.now()
             )
 
             val success = userRepository.createUser(user)
@@ -110,7 +113,7 @@ class AuthRepository {
                 .await()
 
             val phoneQuery = firestore.collection("users")
-                .whereEqualTo("mobile_number", phone)
+                .whereEqualTo("mobileNumber", phone) // Updated field name
                 .get()
                 .await()
 
@@ -224,11 +227,13 @@ class AuthRepository {
             if (user == null) {
                 user = User(
                     id = firebaseUser.uid,
-                    mobile_number = firebaseUser.phoneNumber ?: "",
-                    full_name = firebaseUser.displayName ?: "User",
+                    mobileNumber = firebaseUser.phoneNumber ?: "",
+                    fullName = firebaseUser.displayName ?: "User",
                     email = firebaseUser.email ?: "",
                     token_balance = 5,
-                    free_listings_used = 0
+                    free_listings_used = 0,
+                    created_at = Timestamp.now(),
+                    updated_at = Timestamp.now()
                 )
                 userRepository.createUser(user)
             }

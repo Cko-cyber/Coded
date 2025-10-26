@@ -100,7 +100,7 @@ fun ProfileScreen(navController: NavController, authRepository: AuthRepository) 
 
                         // FIXED: Use full_name instead of firstName and lastName
                         Text(
-                            text = currentUser?.full_name ?: "User",
+                            text = currentUser?.fullName ?: "User",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -133,7 +133,7 @@ fun ProfileScreen(navController: NavController, authRepository: AuthRepository) 
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = currentUser?.mobile_number ?: "Phone not set",
+                                text = currentUser?.mobileNumber ?: "Phone not set",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.Gray
                             )

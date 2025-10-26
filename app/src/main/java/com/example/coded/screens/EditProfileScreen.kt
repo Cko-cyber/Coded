@@ -22,8 +22,8 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
     val currentUser by authRepository.currentUser.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    var fullName by remember { mutableStateOf(currentUser?.full_name ?: "") }
-    var mobileNumber by remember { mutableStateOf(currentUser?.mobile_number ?: "") }
+    var fullName by remember { mutableStateOf(currentUser?.fullName ?: "") }
+    var mobileNumber by remember { mutableStateOf(currentUser?.mobileNumber ?: "") }
     var email by remember { mutableStateOf(currentUser?.email ?: "") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -32,8 +32,8 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
     // Initialize fields when user data loads
     LaunchedEffect(currentUser) {
         currentUser?.let { user ->
-            fullName = user.full_name
-            mobileNumber = user.mobile_number
+            fullName = user.fullName
+            mobileNumber = user.mobileNumber
             email = user.email
         }
     }
@@ -195,8 +195,8 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                             }
 
                             val updatedUser = currentUser!!.copy(
-                                full_name = fullName,
-                                mobile_number = mobileNumber,
+                                fullName = fullName,
+                                mobileNumber = mobileNumber,
                                 updated_at = com.google.firebase.Timestamp.now()
                             )
 

@@ -29,8 +29,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.coded.data.AuthRepository
+import com.example.coded.data.UserRepository
 import com.example.coded.viewmodels.CreateListingViewModel
 import com.example.coded.viewmodels.CreateListingUiState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,9 +43,12 @@ fun CreateListingScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
+    val userRepository = remember { UserRepository() }
 
     // Get userId from AuthRepository
     val userId = authRepository.getCurrentFirebaseUser()?.uid ?: ""
+    val currentUser by authRepository.currentUser.collectAsState()
 
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -59,11 +64,29 @@ fun CreateListingScreen(
     // Success dialog
     if (uiState.isSuccess) {
         AlertDialog(
-            onDismissRequest = { },
+            onDismissRequest = {
+                viewModel.resetState()
+                navController.popBackStack()
+            },
             title = { Text("Success!") },
-            text = { Text("Your listing has been created successfully.") },
+            text = {
+                Column {
+                    Text("Your listing has been created successfully.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (currentUser?.free_listings_used ?: 0 < 5) {
+                            "Free listing used (${(currentUser?.free_listings_used ?: 0) + 1}/5)"
+                        } else {
+                            "1 token deducted. Remaining: ${(currentUser?.token_balance ?: 0) - 1}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
+                    viewModel.resetState()
                     navController.popBackStack()
                 }) {
                     Text("OK")
@@ -94,6 +117,12 @@ fun CreateListingScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
+            // Token Balance Info
+            currentUser?.let { user ->
+                TokenBalanceInfo(user)
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Title
             Text(
                 text = "List Your Cattle",
@@ -157,13 +186,26 @@ fun CreateListingScreen(
             Button(
                 onClick = {
                     if (userId.isNotEmpty()) {
-                        viewModel.createListing(context, userId)
+                        coroutineScope.launch {
+                            // Check if user has available listings
+                            val canCreateListing = checkIfUserCanCreateListing(
+                                userRepository = userRepository,
+                                userId = userId,
+                                currentUser = currentUser
+                            )
+
+                            if (canCreateListing) {
+                                viewModel.createListing(context, userId)
+                            } else {
+                                viewModel.setError("Not enough tokens to create listing")
+                            }
+                        }
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = !uiState.isLoading,
+                enabled = !uiState.isLoading && isFormValid(uiState),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (uiState.isLoading) {
@@ -185,6 +227,77 @@ fun CreateListingScreen(
     }
 }
 
+@Composable
+fun TokenBalanceInfo(user: com.example.coded.data.User) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Listing Balance",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (user.free_listings_used < 5) {
+                    Text(
+                        text = "Free listings: ${user.free_listings_used}/5 used",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                } else {
+                    Text(
+                        text = "Tokens: ${user.token_balance}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Info icon with tooltip
+            Box {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = "Listing info",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// Helper function to check if user can create listing
+private suspend fun checkIfUserCanCreateListing(
+    userRepository: UserRepository,
+    userId: String,
+    currentUser: com.example.coded.data.User?
+): Boolean {
+    val user = currentUser ?: userRepository.getUser(userId)
+    return user?.let {
+        it.free_listings_used < 5 || it.token_balance > 0
+    } ?: false
+}
+
+// Helper function to validate form
+private fun isFormValid(uiState: CreateListingUiState): Boolean {
+    return uiState.selectedImages.isNotEmpty() &&
+            uiState.breed.isNotBlank() &&
+            uiState.age.isNotBlank() &&
+            uiState.price.isNotBlank() &&
+            uiState.location.isNotBlank() &&
+            uiState.deworming.isNotBlank() &&
+            uiState.vaccinated.isNotBlank()
+}
+
+// The rest of your existing composables remain the same...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FormFieldsSection(
