@@ -1,5 +1,6 @@
 package com.example.coded.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,44 +11,30 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.coded.data.AuthRepository
 import com.example.coded.data.Listing
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.coded.viewmodels.ShortlistViewModel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import java.text.NumberFormat
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShortlistScreen(navController: NavController, authRepository: AuthRepository) {
+    val viewModel: ShortlistViewModel = viewModel()
     val currentUser by authRepository.currentUser.collectAsState()
+    val shortlistedListings by viewModel.shortlistedListings.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    var shortlistedListings by remember { mutableStateOf<List<Listing>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    // Load shortlisted listings
+    // Load shortlist when screen opens
     LaunchedEffect(currentUser) {
-        if (currentUser != null) {
-            coroutineScope.launch {
-                try {
-                    isLoading = true
-                    val listings = loadShortlistedListings(currentUser!!.id)
-                    shortlistedListings = listings
-                    error = null
-                } catch (e: Exception) {
-                    error = "Failed to load shortlist: ${e.message}"
-                } finally {
-                    isLoading = false
-                }
-            }
+        currentUser?.let {
+            viewModel.loadShortlist(it.id)
         }
     }
 
@@ -72,48 +59,41 @@ fun ShortlistScreen(navController: NavController, authRepository: AuthRepository
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .background(Color(0xFFF5F5F5))
         ) {
             when {
                 isLoading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = Color(0xFF013B33)
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFF013B33))
+                    }
                 }
 
                 error != null -> {
                     Column(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             Icons.Default.Error,
-                            contentDescription = null,
+                            contentDescription = "Error",
                             modifier = Modifier.size(64.dp),
-                            tint = Color.Gray
+                            tint = Color.Red
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = error!!,
+                            text = error ?: "Unknown error",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.Gray
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
                             onClick = {
-                                coroutineScope.launch {
-                                    try {
-                                        isLoading = true
-                                        val listings = loadShortlistedListings(currentUser!!.id)
-                                        shortlistedListings = listings
-                                        error = null
-                                    } catch (e: Exception) {
-                                        error = "Failed to load shortlist: ${e.message}"
-                                    } finally {
-                                        isLoading = false
-                                    }
+                                currentUser?.let {
+                                    viewModel.loadShortlist(it.id)
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
@@ -127,32 +107,33 @@ fun ShortlistScreen(navController: NavController, authRepository: AuthRepository
 
                 shortlistedListings.isEmpty() -> {
                     Column(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             Icons.Default.FavoriteBorder,
-                            contentDescription = null,
+                            contentDescription = "Empty",
                             modifier = Modifier.size(64.dp),
                             tint = Color.Gray
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "No saved listings yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.Gray
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Start browsing and save your favorites",
+                            text = "Tap the heart icon on listings to save them here",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.Gray
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         Button(
-                            onClick = { navController.navigate(Screen.Listings.route) },
+                            onClick = {
+                                navController.navigate(Screen.Listings.route)
+                            },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFF013B33)
                             )
@@ -164,8 +145,9 @@ fun ShortlistScreen(navController: NavController, authRepository: AuthRepository
 
                 else -> {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(
@@ -176,8 +158,9 @@ fun ShortlistScreen(navController: NavController, authRepository: AuthRepository
                                 listing = listing,
                                 onRemove = {
                                     coroutineScope.launch {
-                                        removeFromShortlist(currentUser!!.id, listing.id)
-                                        shortlistedListings = shortlistedListings.filter { it.id != listing.id }
+                                        currentUser?.let { user ->
+                                            viewModel.removeFromShortlist(user.id, listing.id)
+                                        }
                                     }
                                 },
                                 onClick = {
@@ -201,11 +184,99 @@ fun ShortlistCard(
 ) {
     var showRemoveDialog by remember { mutableStateOf(false) }
 
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Image
+            if (listing.image_urls.isNotEmpty()) {
+                AsyncImage(
+                    model = listing.image_urls.first(),
+                    contentDescription = "Listing image",
+                    modifier = Modifier
+                        .width(120.dp)
+                        .height(120.dp)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .width(120.dp)
+                        .height(120.dp)
+                        .background(Color.LightGray),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Pets,
+                        contentDescription = null,
+                        tint = Color.Gray
+                    )
+                }
+            }
+
+            // Details
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = listing.breed,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Age: ${listing.age}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = listing.location,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "E ${listing.price}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF013B33)
+                    )
+
+                    IconButton(
+                        onClick = { showRemoveDialog = true }
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Remove",
+                            tint = Color.Red
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     if (showRemoveDialog) {
         AlertDialog(
             onDismissRequest = { showRemoveDialog = false },
             title = { Text("Remove from Shortlist") },
-            text = { Text("Are you sure you want to remove this listing from your shortlist?") },
+            text = { Text("Remove this listing from your shortlist?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -222,156 +293,5 @@ fun ShortlistCard(
                 }
             }
         )
-    }
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(4.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
-        ) {
-            // Image
-            if (listing.image_urls.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.size(100.dp),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    AsyncImage(
-                        model = listing.image_urls.first(),
-                        contentDescription = "Listing image",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            } else {
-                Card(
-                    modifier = Modifier.size(100.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.LightGray.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Pets,
-                            contentDescription = null,
-                            tint = Color.Gray
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Details
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            ) {
-                Text(
-                    text = listing.breed,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = "Age: ${listing.age}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = listing.location,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray,
-                    maxLines = 1
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "E ${NumberFormat.getNumberInstance(Locale.US).format(listing.price)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF013B33)
-                )
-            }
-
-            // Remove button - FIXED: Use Delete icon instead of FavoriteRemove
-            IconButton(
-                onClick = { showRemoveDialog = true }
-            ) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Remove from shortlist",
-                    tint = Color.Red
-                )
-            }
-        }
-    }
-}
-
-// Helper functions
-suspend fun loadShortlistedListings(userId: String): List<Listing> {
-    val firestore = FirebaseFirestore.getInstance()
-
-    // Get shortlist document IDs
-    val shortlistSnapshot = firestore.collection("shortlist")
-        .whereEqualTo("userId", userId)
-        .get()
-        .await()
-
-    val listingIds = shortlistSnapshot.documents.mapNotNull {
-        it.getString("listingId")
-    }
-
-    if (listingIds.isEmpty()) {
-        return emptyList()
-    }
-
-    // Get listings
-    val listings = mutableListOf<Listing>()
-    for (listingId in listingIds) {
-        try {
-            val doc = firestore.collection("listings")
-                .document(listingId)
-                .get()
-                .await()
-
-            if (doc.exists()) {
-                doc.toObject(Listing::class.java)?.copy(id = doc.id)?.let {
-                    listings.add(it)
-                }
-            }
-        } catch (e: Exception) {
-            // Continue loading other listings even if one fails
-            continue
-        }
-    }
-
-    return listings
-}
-
-suspend fun removeFromShortlist(userId: String, listingId: String) {
-    try {
-        FirebaseFirestore.getInstance()
-            .collection("shortlist")
-            .document("${userId}_${listingId}")
-            .delete()
-            .await()
-    } catch (e: Exception) {
-        throw Exception("Failed to remove from shortlist: ${e.message}")
     }
 }

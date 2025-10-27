@@ -9,11 +9,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coded.data.AuthRepository
-import com.example.coded.data.User
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,19 +20,19 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
     val currentUser by authRepository.currentUser.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    var fullName by remember { mutableStateOf(currentUser?.fullName ?: "") }
-    var mobileNumber by remember { mutableStateOf(currentUser?.mobileNumber ?: "") }
-    var email by remember { mutableStateOf(currentUser?.email ?: "") }
+    var fullName by remember { mutableStateOf(currentUser?.full_name ?: "") }
+    var mobileNumber by remember { mutableStateOf(currentUser?.mobile_number ?: "") }
+    var location by remember { mutableStateOf(currentUser?.location ?: "") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
 
-    // Initialize fields when user data loads
+    // Update fields when user data loads
     LaunchedEffect(currentUser) {
-        currentUser?.let { user ->
-            fullName = user.fullName
-            mobileNumber = user.mobileNumber
-            email = user.email
+        currentUser?.let {
+            fullName = it.full_name
+            mobileNumber = it.mobile_number
+            location = it.location
         }
     }
 
@@ -62,20 +60,22 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Update Your Information",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF013B33),
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
+            if (currentUser == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+                return@Scaffold
+            }
 
             // Full Name
             OutlinedTextField(
                 value = fullName,
                 onValueChange = { fullName = it },
                 label = { Text("Full Name") },
-                leadingIcon = { Icon(Icons.Default.Person, "Name") },
+                leadingIcon = { Icon(Icons.Default.Person, null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -91,7 +91,7 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 value = mobileNumber,
                 onValueChange = { mobileNumber = it },
                 label = { Text("Mobile Number") },
-                leadingIcon = { Icon(Icons.Default.Phone, "Phone") },
+                leadingIcon = { Icon(Icons.Default.Phone, null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -104,13 +104,13 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
 
             // Email (read-only)
             OutlinedTextField(
-                value = email,
-                onValueChange = { },
+                value = currentUser?.email ?: "",
+                onValueChange = {},
                 label = { Text("Email") },
-                leadingIcon = { Icon(Icons.Default.Email, "Email") },
+                leadingIcon = { Icon(Icons.Default.Email, null) },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
                 enabled = false,
+                singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     disabledBorderColor = Color.Gray,
                     disabledLabelColor = Color.Gray
@@ -124,34 +124,23 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 modifier = Modifier.padding(start = 16.dp, top = 4.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Success Message
-            successMessage?.let {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF4CAF50).copy(alpha = 0.1f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = Color(0xFF4CAF50)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = it,
-                            color = Color(0xFF4CAF50)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
+            // Location
+            OutlinedTextField(
+                value = location,
+                onValueChange = { location = it },
+                label = { Text("Location") },
+                leadingIcon = { Icon(Icons.Default.LocationOn, null) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF013B33),
+                    focusedLabelColor = Color(0xFF013B33)
+                )
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Error Message
             errorMessage?.let {
@@ -166,7 +155,7 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Default.Warning,
+                            Icons.Default.Error,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error
                         )
@@ -180,40 +169,79 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
+            // Success Message
+            successMessage?.let {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFE8F5E9)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = it,
+                            color = Color(0xFF2E7D32)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Save Button
             Button(
                 onClick = {
                     coroutineScope.launch {
+                        // Validate
+                        when {
+                            fullName.isBlank() -> {
+                                errorMessage = "Full name is required"
+                                return@launch
+                            }
+                            fullName.length < 2 -> {
+                                errorMessage = "Full name must be at least 2 characters"
+                                return@launch
+                            }
+                            mobileNumber.isBlank() -> {
+                                errorMessage = "Mobile number is required"
+                                return@launch
+                            }
+                            location.isBlank() -> {
+                                errorMessage = "Location is required"
+                                return@launch
+                            }
+                        }
+
                         isLoading = true
                         errorMessage = null
                         successMessage = null
 
-                        try {
-                            if (currentUser == null) {
-                                errorMessage = "User not found"
-                                return@launch
-                            }
+                        val updatedUser = currentUser!!.copy(
+                            full_name = fullName.trim(),
+                            mobile_number = mobileNumber.trim(),
+                            location = location.trim()
+                        )
 
-                            val updatedUser = currentUser!!.copy(
-                                fullName = fullName,
-                                mobileNumber = mobileNumber,
-                                updated_at = com.google.firebase.Timestamp.now()
-                            )
+                        val success = authRepository.updateUser(updatedUser)
 
-                            val success = authRepository.updateUser(updatedUser)
-
-                            if (success) {
-                                successMessage = "Profile updated successfully!"
-                                // Refresh user data
-                                authRepository.refreshUserData()
-                            } else {
-                                errorMessage = "Failed to update profile"
-                            }
-                        } catch (e: Exception) {
-                            errorMessage = "Error: ${e.message}"
-                        } finally {
-                            isLoading = false
+                        if (success) {
+                            successMessage = "Profile updated successfully!"
+                            // Navigate back after a delay
+                            kotlinx.coroutines.delay(1500)
+                            navController.popBackStack()
+                        } else {
+                            errorMessage = "Failed to update profile. Please try again."
                         }
+
+                        isLoading = false
                     }
                 },
                 modifier = Modifier
@@ -222,12 +250,12 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF013B33)
                 ),
-                enabled = !isLoading && fullName.isNotBlank() && mobileNumber.isNotBlank()
+                enabled = !isLoading
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
                 } else {
                     Icon(Icons.Default.Save, "Save")
@@ -244,30 +272,6 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Cancel")
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Account Actions Section
-            Text(
-                text = "Account Actions",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF013B33),
-                modifier = Modifier.padding(vertical = 16.dp)
-            )
-
-            // Change Password (placeholder)
-            OutlinedButton(
-                onClick = {
-                    // TODO: Implement password change
-                    errorMessage = "Password change feature coming soon!"
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Lock, "Password")
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Change Password")
             }
         }
     }

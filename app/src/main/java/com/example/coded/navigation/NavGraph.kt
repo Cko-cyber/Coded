@@ -14,10 +14,16 @@ fun NavGraph(
     navController: NavHostController,
     authRepository: AuthRepository
 ) {
+    // ALWAYS start with splash screen
     NavHost(
         navController = navController,
-        startDestination = if (authRepository.isUserLoggedIn()) Screen.MainHome.route else Screen.Login.route
+        startDestination = Screen.Splash.route
     ) {
+        // Splash Screen
+        composable(Screen.Splash.route) {
+            SplashScreen(navController, authRepository)
+        }
+
         // Auth Flow
         composable(Screen.Login.route) {
             LoginScreen(navController, authRepository)

@@ -5,11 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.coded.data.Listing
-import com.example.coded.data.ListingRepository
-import com.example.coded.data.ListingTier
-import com.example.coded.data.SupabaseStorageHelper
-import com.example.coded.data.UserRepository // ADD THIS IMPORT
+import com.example.coded.data.*
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,12 +31,12 @@ data class CreateListingUiState(
 class CreateListingViewModel : ViewModel() {
     private val TAG = "CreateListingVM"
     private val listingRepository = ListingRepository()
-    private val userRepository = UserRepository() // ADD USER REPOSITORY
+    private val tokenService = TokenService()
 
     private val _uiState = MutableStateFlow(CreateListingUiState())
     val uiState: StateFlow<CreateListingUiState> = _uiState
 
-    // ----------------- Update form fields -----------------
+    // Update form fields
     fun updateBreed(value: String) {
         _uiState.value = _uiState.value.copy(breed = value)
     }
@@ -69,22 +65,17 @@ class CreateListingViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(fullDetails = value)
     }
 
-    // Update tier
     fun updateTier(tier: ListingTier) {
         _uiState.value = _uiState.value.copy(tier = tier)
 
-        // If current images exceed new tier's max, remove excess images
         val currentImages = _uiState.value.selectedImages
         if (currentImages.size > tier.maxImages) {
             val updatedImages = currentImages.take(tier.maxImages)
             _uiState.value = _uiState.value.copy(selectedImages = updatedImages)
             Log.d(TAG, "📸 Tier changed to ${tier.displayName}. Images reduced to ${updatedImages.size}/${tier.maxImages}")
-        } else {
-            Log.d(TAG, "📸 Tier changed to ${tier.displayName}. Max images: ${tier.maxImages}")
         }
     }
 
-    // ----------------- Image handling -----------------
     fun addImages(uris: List<Uri>) {
         val currentImages = _uiState.value.selectedImages
         val maxImages = _uiState.value.tier.maxImages
@@ -110,78 +101,11 @@ class CreateListingViewModel : ViewModel() {
         Log.d(TAG, "🗑️ All images cleared")
     }
 
-    // ----------------- Reset form -----------------
     fun resetForm() {
         _uiState.value = CreateListingUiState()
         Log.d(TAG, "🔄 Form reset")
     }
 
-    // ----------------- Reset state (for after success) -----------------
-    fun resetState() {
-        _uiState.value = CreateListingUiState()
-        Log.d(TAG, "🔄 State reset")
-    }
-
-    // ----------------- Set error -----------------
-    fun setError(message: String) {
-        _uiState.value = _uiState.value.copy(error = message)
-        Log.e(TAG, "❌ Error set: $message")
-    }
-
-    // ----------------- Check if user can create listing -----------------
-    suspend fun canUserCreateListing(userId: String): Boolean {
-        return try {
-            val user = userRepository.getUser(userId)
-            user?.let {
-                it.free_listings_used < 5 || it.token_balance > 0
-            } ?: false
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error checking user balance: ${e.message}")
-            false
-        }
-    }
-
-    // ----------------- Deduct token after listing creation -----------------
-    private suspend fun deductTokenAfterListing(userId: String): Boolean {
-        return try {
-            val user = userRepository.getUser(userId)
-            if (user == null) {
-                Log.e(TAG, "❌ User not found for token deduction")
-                return false
-            }
-
-            Log.d(TAG, "💰 Token deduction - Free used: ${user.free_listings_used}/5, Tokens: ${user.token_balance}")
-
-            val success = if (user.free_listings_used < 5) {
-                // Use free listing
-                Log.d(TAG, "🎯 Using free listing (${user.free_listings_used + 1}/5)")
-                userRepository.incrementFreeListingsUsed(userId)
-            } else {
-                // Deduct token
-                if (user.token_balance > 0) {
-                    val newBalance = user.token_balance - 1
-                    Log.d(TAG, "💳 Deducting token. New balance: $newBalance")
-                    userRepository.updateTokenBalance(userId, newBalance)
-                } else {
-                    Log.e(TAG, "❌ No tokens available for deduction")
-                    false
-                }
-            }
-
-            if (success) {
-                Log.d(TAG, "✅ Token deduction successful")
-            } else {
-                Log.e(TAG, "❌ Token deduction failed")
-            }
-
-            success
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Exception during token deduction: ${e.message}")
-            false
-        }
-    }
-
-    // ----------------- Create Listing -----------------
     fun createListing(context: Context, userId: String) {
         Log.d(TAG, "🚀 Starting listing creation for user: $userId")
 
@@ -195,36 +119,29 @@ class CreateListingViewModel : ViewModel() {
                 return
             }
             state.breed.isBlank() -> {
-                Log.w(TAG, "⚠️ Breed is blank")
                 _uiState.value = state.copy(error = "Breed is required")
                 return
             }
             state.age.isBlank() -> {
-                Log.w(TAG, "⚠️ Age is blank")
                 _uiState.value = state.copy(error = "Age is required")
                 return
             }
             state.price.isBlank() -> {
-                Log.w(TAG, "⚠️ Price is blank")
                 _uiState.value = state.copy(error = "Price is required")
                 return
             }
             state.location.isBlank() -> {
-                Log.w(TAG, "⚠️ Location is blank")
                 _uiState.value = state.copy(error = "Location is required")
                 return
             }
             state.selectedImages.isEmpty() -> {
-                Log.w(TAG, "⚠️ No images selected")
                 _uiState.value = state.copy(error = "At least one image is required")
                 return
             }
         }
 
-        // ✅ CRITICAL FIX: Convert price to Long (to match Firestore number type)
         val priceAsLong = state.price.toLongOrNull()
         if (priceAsLong == null) {
-            Log.w(TAG, "⚠️ Price is not a valid number: ${state.price}")
             _uiState.value = state.copy(error = "Valid price is required (numbers only)")
             return
         }
@@ -234,20 +151,34 @@ class CreateListingViewModel : ViewModel() {
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Check if user can create listing (has free listings or tokens)
-                val canCreate = canUserCreateListing(userId)
-                if (!canCreate) {
-                    Log.e(TAG, "❌ User cannot create listing - no free listings or tokens")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = "No available listings. You need tokens to create more listings."
-                    )
-                    return@launch
+                // Check and deduct tokens BEFORE creating listing
+                Log.d(TAG, "💰 Checking tokens for tier: ${state.tier.displayName}")
+
+                if (state.tier == ListingTier.FREE) {
+                    val canUse = tokenService.canUseFreeListingthis Month(userId)
+                    if (!canUse) {
+                        Log.w(TAG, "⚠️ User has used all free listings")
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = "You've used all 3 free listings this month. Please buy tokens or wait until next month."
+                        )
+                        return@launch
+                    }
+                } else {
+                    val hasTokens = tokenService.hasEnoughTokens(userId, state.tier)
+                    if (!hasTokens) {
+                        val cost = tokenService.getTokenCost(state.tier)
+                        Log.w(TAG, "⚠️ Insufficient tokens. Need: $cost")
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = "Insufficient tokens. You need ${cost} tokens for ${state.tier.displayName} listing."
+                        )
+                        return@launch
+                    }
                 }
 
-                Log.d(TAG, "📤 Uploading ${state.selectedImages.size} images to Supabase...")
-
-                // Upload images to Supabase
+                // Upload images
+                Log.d(TAG, "📤 Uploading ${state.selectedImages.size} images...")
                 val uploadedUrls = SupabaseStorageHelper.uploadImagesWithProgress(
                     context,
                     state.selectedImages,
@@ -255,30 +186,26 @@ class CreateListingViewModel : ViewModel() {
                 ) { overallProgress ->
                     val progressMap = state.selectedImages.associateWith { overallProgress }
                     _uiState.value = _uiState.value.copy(uploadProgress = progressMap)
-                    Log.d(TAG, "📊 Upload progress: ${(overallProgress * 100).toInt()}%")
                 }
 
                 if (uploadedUrls.isEmpty()) {
-                    Log.e(TAG, "❌ Image upload failed - no URLs returned")
+                    Log.e(TAG, "❌ Image upload failed")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = "Image upload failed"
+                        error = "Image upload failed. Please try again."
                     )
                     return@launch
                 }
 
                 Log.d(TAG, "✅ Images uploaded successfully: ${uploadedUrls.size} URLs")
-                uploadedUrls.forEachIndexed { index, url ->
-                    Log.d(TAG, "   Image $index: ${url.take(50)}...")
-                }
 
-                // ✅ Create listing object with LONG price and STRING tier
+                // Create listing object
                 val listing = Listing(
-                    id = "", // Will be set by repository
+                    id = "",
                     user_id = userId,
                     breed = state.breed,
                     age = state.age,
-                    price = priceAsLong,  // ✅ Long, not String
+                    price = priceAsLong,
                     location = state.location,
                     full_details = state.fullDetails,
                     deworming = state.deworming,
@@ -286,44 +213,34 @@ class CreateListingViewModel : ViewModel() {
                     image_urls = uploadedUrls,
                     is_active = true,
                     created_at = Timestamp.now(),
-                    listingTier = state.tier.name  // ✅ Save as String: "FREE", "BASIC", etc.
+                    listingTier = state.tier.name
                 )
 
                 Log.d(TAG, "💾 Creating listing in Firestore...")
-                Log.d(TAG, "   Breed: ${listing.breed}")
-                Log.d(TAG, "   Price: ${listing.price} (Long)")
-                Log.d(TAG, "   User ID: ${listing.user_id}")
-                Log.d(TAG, "   Images: ${listing.image_urls.size}")
-                Log.d(TAG, "   Active: ${listing.is_active}")
-                Log.d(TAG, "   Tier: ${listing.listingTier} (String)")
-
-                // Save to Firestore
                 val success = listingRepository.createListing(context, listing, state.selectedImages)
 
                 if (success) {
-                    Log.d(TAG, "✅✅✅ LISTING CREATED SUCCESSFULLY! ✅✅✅")
+                    // DEDUCT TOKENS AFTER SUCCESSFUL LISTING CREATION
+                    Log.d(TAG, "💰 Deducting tokens for tier: ${state.tier.displayName}")
+                    val deductResult = tokenService.deductTokens(userId, state.tier)
 
-                    // ✅ DEDUCT TOKEN/FREE LISTING AFTER SUCCESSFUL CREATION
-                    val tokenDeductionSuccess = deductTokenAfterListing(userId)
-
-                    if (tokenDeductionSuccess) {
-                        Log.d(TAG, "💰 Token/free listing deducted successfully")
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            isSuccess = true,
-                            error = null
-                        )
+                    if (deductResult.isSuccess) {
+                        val newBalance = deductResult.getOrNull() ?: 0
+                        Log.d(TAG, "✅ Tokens deducted. New balance: $newBalance")
                     } else {
-                        Log.e(TAG, "❌ Token deduction failed - rolling back listing")
-                        // In a real app, you might want to delete the listing here
-                        // For now, we'll just show an error
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Listing created but token deduction failed. Please contact support."
-                        )
+                        Log.e(TAG, "⚠️ Token deduction failed: ${deductResult.exceptionOrNull()?.message}")
+                        // Listing was created but token deduction failed
+                        // You might want to handle this case differently
                     }
+
+                    Log.d(TAG, "✅✅✅ LISTING CREATED SUCCESSFULLY! ✅✅✅")
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isSuccess = true,
+                        error = null
+                    )
                 } else {
-                    Log.e(TAG, "❌ Repository returned false - listing creation failed")
+                    Log.e(TAG, "❌ Listing creation failed")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = "Failed to create listing. Please try again."
@@ -332,7 +249,6 @@ class CreateListingViewModel : ViewModel() {
 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Exception during listing creation: ${e.message}", e)
-                e.printStackTrace()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = "Error: ${e.message}"
