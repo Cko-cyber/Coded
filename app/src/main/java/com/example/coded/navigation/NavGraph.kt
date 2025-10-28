@@ -56,6 +56,30 @@ fun NavGraph(
             val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
             SingleStockScreen(navController, listingId, authRepository)
         }
+        // Add these composables to your NavGraph
+        composable(
+            route = "book_call/{listingId}/{sellerId}",
+            arguments = listOf(
+                navArgument("listingId") { type = NavType.StringType },
+                navArgument("sellerId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
+            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
+            BookCallScreen(navController, listingId, sellerId, authRepository)
+        }
+
+        composable(
+            route = "schedule_viewing/{listingId}/{sellerId}",
+            arguments = listOf(
+                navArgument("listingId") { type = NavType.StringType },
+                navArgument("sellerId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
+            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
+            ScheduleViewingScreen(navController, listingId, sellerId, authRepository)
+        }
 
         // Profile Sub-screens
         composable("buy_tokens") {
