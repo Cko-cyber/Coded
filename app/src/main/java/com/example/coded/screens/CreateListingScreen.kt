@@ -6,6 +6,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -29,10 +30,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.coded.data.AuthRepository
-import com.example.coded.data.UserRepository
+import com.example.coded.data.ListingTier
 import com.example.coded.viewmodels.CreateListingViewModel
-import com.example.coded.viewmodels.CreateListingUiState
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,50 +42,27 @@ fun CreateListingScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
-    val userRepository = remember { UserRepository() }
-
-    // Get userId from AuthRepository
-    val userId = authRepository.getCurrentFirebaseUser()?.uid ?: ""
     val currentUser by authRepository.currentUser.collectAsState()
 
-    // Image picker launcher
+    val userId = authRepository.getCurrentFirebaseUser()?.uid ?: ""
+
+    var showTierDialog by remember { mutableStateOf(false) }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(
-            maxItems = uiState.tier.maxImages
-        )
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = uiState.tier.maxImages)
     ) { uris ->
         if (uris.isNotEmpty()) {
             viewModel.addImages(uris)
         }
     }
 
-    // Success dialog
     if (uiState.isSuccess) {
         AlertDialog(
-            onDismissRequest = {
-                viewModel.resetState()
-                navController.popBackStack()
-            },
+            onDismissRequest = { },
             title = { Text("Success!") },
-            text = {
-                Column {
-                    Text("Your listing has been created successfully.")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (currentUser?.free_listings_used ?: 0 < 5) {
-                            "Free listing used (${(currentUser?.free_listings_used ?: 0) + 1}/5)"
-                        } else {
-                            "1 token deducted. Remaining: ${(currentUser?.token_balance ?: 0) - 1}"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
+            text = { Text("Your listing has been created successfully.") },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.resetState()
                     navController.popBackStack()
                 }) {
                     Text("OK")
@@ -105,7 +81,9 @@ fun CreateListingScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = Color(0xFF013B33),
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
                 )
             )
         }
@@ -117,19 +95,124 @@ fun CreateListingScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            // Token Balance Info
-            currentUser?.let { user ->
-                TokenBalanceInfo(user)
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
             // Title
             Text(
                 text = "List Your Cattle",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
             )
+
+            // User Token Info Card
+            currentUser?.let { user ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF013B33))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Your Tokens",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                            Text(
+                                text = "${user.token_balance} tokens",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "Free Listings",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                            Text(
+                                text = "${3 - user.free_listings_used} left this month",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD700)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Listing Tier Selection
+            Text(
+                text = "Select Listing Type",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Text(
+                text = "Choose your listing priority and visibility",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showTierDialog = true },
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = uiState.tier.displayName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF013B33)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                color = getTierColor(uiState.tier),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = if (uiState.tier == ListingTier.FREE)
+                                        "FREE"
+                                    else
+                                        "${getTierCost(uiState.tier)} tokens",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = getTierDescription(uiState.tier),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    }
+                    Icon(Icons.Default.KeyboardArrowDown, "Change tier")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Image Upload Section
             ImageUploadSection(
@@ -147,11 +230,8 @@ fun CreateListingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Form Fields Section - Inline implementation
-            FormFieldsSection(
-                uiState = uiState,
-                viewModel = viewModel
-            )
+            // Form Fields
+            FormFieldsSection(uiState = uiState, viewModel = viewModel)
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -186,32 +266,22 @@ fun CreateListingScreen(
             Button(
                 onClick = {
                     if (userId.isNotEmpty()) {
-                        coroutineScope.launch {
-                            // Check if user has available listings
-                            val canCreateListing = checkIfUserCanCreateListing(
-                                userRepository = userRepository,
-                                userId = userId,
-                                currentUser = currentUser
-                            )
-
-                            if (canCreateListing) {
-                                viewModel.createListing(context, userId)
-                            } else {
-                                viewModel.setError("Not enough tokens to create listing")
-                            }
-                        }
+                        viewModel.createListing(context, userId)
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                enabled = !uiState.isLoading && isFormValid(uiState),
+                enabled = !uiState.isLoading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF013B33)
+                ),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = Color.White
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Creating Listing...")
@@ -225,83 +295,171 @@ fun CreateListingScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
-}
 
-@Composable
-fun TokenBalanceInfo(user: com.example.coded.data.User) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+    // Tier Selection Dialog
+    if (showTierDialog) {
+        TierSelectionDialog(
+            currentTier = uiState.tier,
+            freeListingsLeft = 3 - (currentUser?.free_listings_used ?: 0),
+            tokenBalance = currentUser?.token_balance ?: 0,
+            onDismiss = { showTierDialog = false },
+            onSelectTier = { tier ->
+                viewModel.updateTier(tier)
+                showTierDialog = false
+            }
         )
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Listing Balance",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (user.free_listings_used < 5) {
-                    Text(
-                        text = "Free listings: ${user.free_listings_used}/5 used",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                } else {
-                    Text(
-                        text = "Tokens: ${user.token_balance}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            // Info icon with tooltip
-            Box {
-                Icon(
-                    Icons.Default.Info,
-                    contentDescription = "Listing info",
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }
 
-// Helper function to check if user can create listing
-private suspend fun checkIfUserCanCreateListing(
-    userRepository: UserRepository,
-    userId: String,
-    currentUser: com.example.coded.data.User?
-): Boolean {
-    val user = currentUser ?: userRepository.getUser(userId)
-    return user?.let {
-        it.free_listings_used < 5 || it.token_balance > 0
-    } ?: false
+@Composable
+fun TierSelectionDialog(
+    currentTier: ListingTier,
+    freeListingsLeft: Int,
+    tokenBalance: Int,
+    onDismiss: () -> Unit,
+    onSelectTier: (ListingTier) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Choose Listing Type",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ListingTier.values().forEach { tier ->
+                    val cost = getTierCost(tier)
+                    val canAfford = if (tier == ListingTier.FREE) {
+                        freeListingsLeft > 0
+                    } else {
+                        tokenBalance >= cost
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .then(
+                                if (currentTier == tier) {
+                                    Modifier.border(
+                                        2.dp,
+                                        Color(0xFF013B33),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .clickable(enabled = canAfford) {
+                                if (canAfford) {
+                                    onSelectTier(tier)
+                                }
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (!canAfford) Color.Gray.copy(alpha = 0.1f) else Color.White
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = tier.displayName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (canAfford) Color(0xFF013B33) else Color.Gray
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    if (currentTier == tier) {
+                                        Icon(
+                                            Icons.Default.CheckCircle,
+                                            "Selected",
+                                            tint = Color(0xFF013B33),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = getTierDescription(tier),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Max ${tier.maxImages} images",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Gray
+                                )
+                            }
+
+                            Surface(
+                                color = getTierColor(tier),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = if (tier == ListingTier.FREE) {
+                                        if (freeListingsLeft > 0) "$freeListingsLeft left" else "None left"
+                                    } else {
+                                        "$cost tokens"
+                                    },
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
 
-// Helper function to validate form
-private fun isFormValid(uiState: CreateListingUiState): Boolean {
-    return uiState.selectedImages.isNotEmpty() &&
-            uiState.breed.isNotBlank() &&
-            uiState.age.isNotBlank() &&
-            uiState.price.isNotBlank() &&
-            uiState.location.isNotBlank() &&
-            uiState.deworming.isNotBlank() &&
-            uiState.vaccinated.isNotBlank()
+fun getTierCost(tier: ListingTier): Int {
+    return when (tier) {
+        ListingTier.FREE -> 0
+        ListingTier.BASIC -> 5
+        ListingTier.BULK -> 10
+        ListingTier.PREMIUM -> 20
+    }
 }
 
-// The rest of your existing composables remain the same...
+fun getTierColor(tier: ListingTier): Color {
+    return when (tier) {
+        ListingTier.FREE -> Color(0xFF4CAF50)
+        ListingTier.BASIC -> Color(0xFF2196F3)
+        ListingTier.BULK -> Color(0xFFFF6F00)
+        ListingTier.PREMIUM -> Color(0xFFFFD700)
+    }
+}
+
+fun getTierDescription(tier: ListingTier): String {
+    return when (tier) {
+        ListingTier.FREE -> "Basic visibility • Standard position"
+        ListingTier.BASIC -> "Enhanced visibility • Priority in search"
+        ListingTier.BULK -> "High visibility • Featured in category"
+        ListingTier.PREMIUM -> "Maximum visibility • Top of all listings"
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FormFieldsSection(
-    uiState: CreateListingUiState,
+    uiState: com.example.coded.viewmodels.CreateListingUiState,
     viewModel: CreateListingViewModel
 ) {
     val breedOptions = listOf("Angus", "Brahman", "Hereford", "Simmental", "Other")
@@ -350,7 +508,6 @@ fun FormFieldsSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Age Field
             OutlinedTextField(
                 value = uiState.age,
                 onValueChange = { viewModel.updateAge(it) },
@@ -361,7 +518,6 @@ fun FormFieldsSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Price Field
             OutlinedTextField(
                 value = uiState.price,
                 onValueChange = { viewModel.updatePrice(it) },
@@ -372,7 +528,6 @@ fun FormFieldsSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Location Field
             OutlinedTextField(
                 value = uiState.location,
                 onValueChange = { viewModel.updateLocation(it) },
@@ -383,7 +538,6 @@ fun FormFieldsSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Deworming Dropdown
             ExposedDropdownMenuBox(
                 expanded = expandedDew,
                 onExpandedChange = { expandedDew = !expandedDew }
@@ -416,7 +570,6 @@ fun FormFieldsSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Vaccination Dropdown
             ExposedDropdownMenuBox(
                 expanded = expandedVac,
                 onExpandedChange = { expandedVac = !expandedVac }
@@ -449,7 +602,6 @@ fun FormFieldsSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Full Details Field
             OutlinedTextField(
                 value = uiState.fullDetails,
                 onValueChange = { viewModel.updateFullDetails(it) },
@@ -495,7 +647,6 @@ fun ImageUploadSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Images Row
             if (selectedImages.isNotEmpty()) {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -510,7 +661,6 @@ fun ImageUploadSection(
                         )
                     }
 
-                    // Add more button
                     if (selectedImages.size < maxImages) {
                         item {
                             AddImageButton(onClick = onAddImages)
@@ -518,7 +668,6 @@ fun ImageUploadSection(
                     }
                 }
             } else {
-                // Empty state - large add button
                 OutlinedButton(
                     onClick = onAddImages,
                     modifier = Modifier
@@ -570,7 +719,6 @@ fun ImagePreviewItem(
             .size(100.dp)
             .clip(RoundedCornerShape(8.dp))
     ) {
-        // Image
         Image(
             painter = rememberAsyncImagePainter(uri),
             contentDescription = null,
@@ -578,7 +726,6 @@ fun ImagePreviewItem(
             contentScale = ContentScale.Crop
         )
 
-        // Upload progress overlay
         if (isLoading && progress != null) {
             Box(
                 modifier = Modifier
@@ -594,7 +741,6 @@ fun ImagePreviewItem(
             }
         }
 
-        // Remove button
         if (!isLoading) {
             IconButton(
                 onClick = onRemove,

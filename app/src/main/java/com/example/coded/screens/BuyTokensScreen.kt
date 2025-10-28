@@ -1,5 +1,8 @@
 package com.example.coded.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,18 +15,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.coded.data.AuthRepository
 import kotlinx.coroutines.launch
 
+// Token packages
 data class TokenPackage(
     val tokens: Int,
     val price: Double,
-    val discount: Int = 0,
-    val isPopular: Boolean = false
+    val popular: Boolean = false,
+    val bonus: Int = 0
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,49 +36,18 @@ fun BuyTokensScreen(navController: NavController, authRepository: AuthRepository
 
     var selectedPackage by remember { mutableStateOf<TokenPackage?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
-    var showSuccessDialog by remember { mutableStateOf(false) }
+    var showPaymentDialog by remember { mutableStateOf(false) }
+    var phoneNumber by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Token packages
     val tokenPackages = listOf(
-        TokenPackage(tokens = 5, price = 50.0),
-        TokenPackage(tokens = 10, price = 90.0, discount = 10, isPopular = true),
-        TokenPackage(tokens = 25, price = 200.0, discount = 20),
-        TokenPackage(tokens = 50, price = 350.0, discount = 30)
+        TokenPackage(tokens = 10, price = 50.0),
+        TokenPackage(tokens = 25, price = 100.0, bonus = 5),
+        TokenPackage(tokens = 50, price = 180.0, popular = true, bonus = 15),
+        TokenPackage(tokens = 100, price = 300.0, bonus = 35),
+        TokenPackage(tokens = 250, price = 650.0, bonus = 100)
     )
-
-    if (showSuccessDialog) {
-        AlertDialog(
-            onDismissRequest = { showSuccessDialog = false },
-            icon = {
-                Icon(
-                    Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = Color(0xFF4CAF50),
-                    modifier = Modifier.size(48.dp)
-                )
-            },
-            title = { Text("Purchase Successful!") },
-            text = {
-                Text(
-                    "Your tokens have been added to your account.",
-                    textAlign = TextAlign.Center
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showSuccessDialog = false
-                        navController.popBackStack()
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF013B33)
-                    )
-                ) {
-                    Text("Done")
-                }
-            }
-        )
-    }
 
     Scaffold(
         topBar = {
@@ -116,7 +87,7 @@ fun BuyTokensScreen(navController: NavController, authRepository: AuthRepository
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Current Balance",
+                        text = "Current Token Balance",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
                     )
@@ -128,7 +99,7 @@ fun BuyTokensScreen(navController: NavController, authRepository: AuthRepository
                         color = Color.White
                     )
                     Text(
-                        text = "Tokens",
+                        text = "tokens",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color.White.copy(alpha = 0.8f)
                     )
@@ -137,21 +108,55 @@ fun BuyTokensScreen(navController: NavController, authRepository: AuthRepository
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Info Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFFFF8E1)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        tint = Color(0xFFFF6F00)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "What are tokens used for?",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Tokens unlock premium listing features for better visibility and priority placement.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
                 text = "Choose a Package",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF013B33)
+                fontWeight = FontWeight.Bold
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // Token Packages
-            tokenPackages.forEach { pkg ->
+            tokenPackages.forEach { package_ ->
                 TokenPackageCard(
-                    package_ = pkg,
-                    isSelected = selectedPackage == pkg,
-                    onClick = { selectedPackage = pkg }
+                    package_ = package_,
+                    isSelected = selectedPackage == package_,
+                    onClick = { selectedPackage = package_ }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             }
@@ -170,53 +175,21 @@ fun BuyTokensScreen(navController: NavController, authRepository: AuthRepository
                         modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
-                        )
+                        Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        Text(it, color = MaterialTheme.colorScheme.onErrorContainer)
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Purchase Button
-            // Purchase Button
             Button(
                 onClick = {
-                    coroutineScope.launch {
-                        if (selectedPackage == null) {
-                            errorMessage = "Please select a package"
-                            return@launch
-                        }
-
-                        isProcessing = true
-                        errorMessage = null
-
-                        try {
-                            // Simulate payment processing
-                            kotlinx.coroutines.delay(2000)
-
-                            // Update user token balance using the correct method
-                            val newBalance = (currentUser?.token_balance ?: 0) + selectedPackage!!.tokens
-                            val success = authRepository.updateTokenBalance(currentUser!!.id, newBalance)
-
-                            if (success) {
-                                authRepository.refreshUserData()
-                                showSuccessDialog = true
-                            } else {
-                                errorMessage = "Payment failed. Please try again."
-                            }
-                        } catch (e: Exception) {
-                            errorMessage = "Error: ${e.message}"
-                        } finally {
-                            isProcessing = false
-                        }
+                    if (selectedPackage != null) {
+                        showPaymentDialog = true
+                    } else {
+                        errorMessage = "Please select a token package"
                     }
                 },
                 modifier = Modifier
@@ -229,67 +202,66 @@ fun BuyTokensScreen(navController: NavController, authRepository: AuthRepository
             ) {
                 if (isProcessing) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Processing...")
                 } else {
                     Icon(Icons.Default.ShoppingCart, "Buy")
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (selectedPackage != null) {
-                            "Pay E ${selectedPackage!!.price}"
-                        } else {
-                            "Select a Package"
-                        }
-                    )
+                    Text("Continue to Payment")
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Info Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF013B33).copy(alpha = 0.05f)
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            tint = Color(0xFF013B33)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "What are tokens for?",
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF013B33)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "• Create premium listings with more visibility\n" +
-                                "• Add more photos to your listings\n" +
-                                "• Feature your listings at the top\n" +
-                                "• Access advanced analytics",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF013B33).copy(alpha = 0.7f)
+            // Payment Info
+            Text(
+                text = "Payment via MTN MoMo • Safe & Secure",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+        }
+    }
+
+    // MoMo Payment Dialog
+    if (showPaymentDialog && selectedPackage != null) {
+        MoMoPaymentDialog(
+            package_ = selectedPackage!!,
+            phoneNumber = phoneNumber,
+            onPhoneNumberChange = { phoneNumber = it },
+            onDismiss = { showPaymentDialog = false },
+            onConfirm = {
+                coroutineScope.launch {
+                    isProcessing = true
+                    errorMessage = null
+
+                    // TODO: Integrate MoMo Pay API here
+                    val success = processMoMoPayment(
+                        userId = currentUser?.id ?: "",
+                        phoneNumber = phoneNumber,
+                        amount = selectedPackage!!.price,
+                        tokens = selectedPackage!!.tokens + selectedPackage!!.bonus
                     )
+
+                    isProcessing = false
+
+                    if (success) {
+                        showPaymentDialog = false
+                        // Refresh user data to show new token balance
+                        authRepository.refreshUserData()
+                        navController.popBackStack()
+                    } else {
+                        errorMessage = "Payment failed. Please try again."
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
-        }
+        )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TokenPackageCard(
     package_: TokenPackage,
@@ -297,27 +269,38 @@ fun TokenPackageCard(
     onClick: () -> Unit
 ) {
     Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Color(0xFF013B33).copy(alpha = 0.1f) else Color.White
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isSelected) {
+                    Modifier.border(
+                        3.dp,
+                        Color(0xFF013B33),
+                        RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (package_.popular) 8.dp else 2.dp
         ),
-        border = if (isSelected) {
-            androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF013B33))
-        } else null,
-        elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 2.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (package_.popular) Color(0xFFFFF8E1) else Color.White
+        )
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             // Popular Badge
-            if (package_.isPopular) {
+            if (package_.popular) {
                 Surface(
                     color = Color(0xFFFF6F00),
-                    shape = RoundedCornerShape(bottomStart = 8.dp),
-                    modifier = Modifier.align(Alignment.TopEnd)
+                    shape = RoundedCornerShape(bottomEnd = 12.dp),
+                    modifier = Modifier.align(Alignment.TopStart)
                 ) {
                     Text(
-                        text = "POPULAR",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        text = "MOST POPULAR",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
@@ -325,48 +308,240 @@ fun TokenPackageCard(
                 }
             }
 
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(20.dp)
+                    .padding(top = if (package_.popular) 24.dp else 0.dp)
             ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Token,
-                            contentDescription = null,
-                            tint = Color(0xFF013B33),
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.Bottom) {
                             Text(
-                                text = "${package_.tokens} Tokens",
-                                style = MaterialTheme.typography.titleLarge,
+                                text = "${package_.tokens}",
+                                style = MaterialTheme.typography.displaySmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF013B33)
                             )
-                            if (package_.discount > 0) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "tokens",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.Gray
+                            )
+                        }
+
+                        if (package_.bonus > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Surface(
+                                color = Color(0xFF4CAF50),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
                                 Text(
-                                    text = "Save ${package_.discount}%",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF4CAF50),
+                                    text = "+${package_.bonus} BONUS",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                     }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "E ${package_.price}",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF013B33)
+                        )
+                        Text(
+                            text = "E ${String.format("%.2f", package_.price / (package_.tokens + package_.bonus))} per token",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
+                        )
+                    }
                 }
 
-                Text(
-                    text = "E ${package_.price}",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF013B33)
-                )
+                if (isSelected) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            "Selected",
+                            tint = Color(0xFF013B33),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Selected",
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF013B33)
+                        )
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+fun MoMoPaymentDialog(
+    package_: TokenPackage,
+    phoneNumber: String,
+    onPhoneNumberChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Payment,
+                    contentDescription = null,
+                    tint = Color(0xFF013B33)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("MTN MoMo Payment", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column {
+                // Package Summary
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFF5F5F5)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Tokens:")
+                            Text(
+                                "${package_.tokens + package_.bonus}",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        if (package_.bonus > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Bonus:", color = Color(0xFF4CAF50))
+                                Text(
+                                    "+${package_.bonus}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                        }
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Total:", fontWeight = FontWeight.Bold)
+                            Text(
+                                "E ${package_.price}",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF013B33),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Phone Number Input
+                OutlinedTextField(
+                    value = phoneNumber,
+                    onValueChange = { newValue ->
+                        val cleaned = newValue.filter { it.isDigit() }
+                        if (cleaned.length <= 8) {
+                            onPhoneNumberChange(cleaned)
+                        }
+                    },
+                    label = { Text("MTN MoMo Number") },
+                    placeholder = { Text("76123456") },
+                    leadingIcon = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "+268",
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Default.Phone, null)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Instructions
+                Text(
+                    text = "You will receive a prompt on your phone to authorize the payment.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = phoneNumber.length == 8,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF013B33)
+                )
+            ) {
+                Text("Pay E ${package_.price}")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// TODO: Integrate actual MoMo Pay API
+suspend fun processMoMoPayment(
+    userId: String,
+    phoneNumber: String,
+    amount: Double,
+    tokens: Int
+): Boolean {
+    // This is a placeholder - integrate with actual MoMo Pay API
+    // Reference: MTN MoMo API documentation for Eswatini
+
+    return try {
+        // Steps for MoMo integration:
+        // 1. Generate transaction ID
+        // 2. Call MoMo /collection/v1_0/requesttopay endpoint
+        // 3. Poll for payment status
+        // 4. If successful, credit tokens to user
+        // 5. Create transaction record
+
+        // For now, simulate delay
+        kotlinx.coroutines.delay(2000)
+
+        // Return true for testing (replace with actual API call result)
+        false // Change to true after API integration
+    } catch (e: Exception) {
+        false
     }
 }

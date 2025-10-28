@@ -21,7 +21,7 @@ fun NavGraph(
     ) {
         // Splash Screen
         composable(Screen.Splash.route) {
-            SplashScreen(navController)
+            SplashScreen(navController, authRepository)
         }
 
         // Auth Flow
@@ -60,6 +60,25 @@ fun NavGraph(
         ) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
             SingleStockScreen(navController, listingId, authRepository)
+        }
+
+        // Chat Screen
+        composable(
+            route = "chat?listingId={listingId}&sellerId={sellerId}",
+            arguments = listOf(
+                navArgument("listingId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("sellerId") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }
+            )
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
+            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
+            ChatScreen(navController, authRepository, listingId, sellerId)
         }
 
         // Profile Sub-screens
