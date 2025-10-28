@@ -154,7 +154,7 @@ fun HomeContent(navController: NavController, authRepository: AuthRepository) {
     ) {
         // Welcome message - using full_name instead of firstName
         Text(
-            text = "Welcome, ${currentUser?.fullName ?: "User"}!",
+            text = "Welcome, ${currentUser?.full_name ?: "User"}!",
             style = MaterialTheme.typography.headlineMedium,
             color = Color(0xFF013B33)
         )

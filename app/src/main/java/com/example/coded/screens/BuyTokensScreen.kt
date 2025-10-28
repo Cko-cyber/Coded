@@ -186,6 +186,7 @@ fun BuyTokensScreen(navController: NavController, authRepository: AuthRepository
             }
 
             // Purchase Button
+            // Purchase Button
             Button(
                 onClick = {
                     coroutineScope.launch {
@@ -201,14 +202,9 @@ fun BuyTokensScreen(navController: NavController, authRepository: AuthRepository
                             // Simulate payment processing
                             kotlinx.coroutines.delay(2000)
 
-                            // Update user token balance
+                            // Update user token balance using the correct method
                             val newBalance = (currentUser?.token_balance ?: 0) + selectedPackage!!.tokens
-                            val success = authRepository.updateUser(
-                                currentUser!!.copy(
-                                    token_balance = newBalance,
-                                    updated_at = com.google.firebase.Timestamp.now()
-                                )
-                            )
+                            val success = authRepository.updateTokenBalance(currentUser!!.id, newBalance)
 
                             if (success) {
                                 authRepository.refreshUserData()

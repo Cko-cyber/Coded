@@ -106,6 +106,22 @@ class CreateListingViewModel : ViewModel() {
         Log.d(TAG, "🔄 Form reset")
     }
 
+    // Add the missing methods
+    fun resetState() {
+        _uiState.value = CreateListingUiState()
+        Log.d(TAG, "🔄 State reset")
+    }
+
+    fun setError(errorMessage: String) {
+        _uiState.value = _uiState.value.copy(error = errorMessage, isLoading = false)
+        Log.e(TAG, "❌ Error set: $errorMessage")
+    }
+
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+        Log.d(TAG, "✅ Error cleared")
+    }
+
     fun createListing(context: Context, userId: String) {
         Log.d(TAG, "🚀 Starting listing creation for user: $userId")
 
@@ -115,34 +131,34 @@ class CreateListingViewModel : ViewModel() {
         when {
             userId.isBlank() -> {
                 Log.e(TAG, "❌ User ID is blank!")
-                _uiState.value = state.copy(error = "User not logged in")
+                setError("User not logged in")
                 return
             }
             state.breed.isBlank() -> {
-                _uiState.value = state.copy(error = "Breed is required")
+                setError("Breed is required")
                 return
             }
             state.age.isBlank() -> {
-                _uiState.value = state.copy(error = "Age is required")
+                setError("Age is required")
                 return
             }
             state.price.isBlank() -> {
-                _uiState.value = state.copy(error = "Price is required")
+                setError("Price is required")
                 return
             }
             state.location.isBlank() -> {
-                _uiState.value = state.copy(error = "Location is required")
+                setError("Location is required")
                 return
             }
             state.selectedImages.isEmpty() -> {
-                _uiState.value = state.copy(error = "At least one image is required")
+                setError("At least one image is required")
                 return
             }
         }
 
         val priceAsLong = state.price.toLongOrNull()
         if (priceAsLong == null) {
-            _uiState.value = state.copy(error = "Valid price is required (numbers only)")
+            setError("Valid price is required (numbers only)")
             return
         }
 
@@ -155,13 +171,10 @@ class CreateListingViewModel : ViewModel() {
                 Log.d(TAG, "💰 Checking tokens for tier: ${state.tier.displayName}")
 
                 if (state.tier == ListingTier.FREE) {
-                    val canUse = tokenService.canUseFreeListingthis Month(userId)
+                    val canUse = tokenService.canUseFreeListingThisMonth(userId)
                     if (!canUse) {
                         Log.w(TAG, "⚠️ User has used all free listings")
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "You've used all 3 free listings this month. Please buy tokens or wait until next month."
-                        )
+                        setError("You've used all 3 free listings this month. Please buy tokens or wait until next month.")
                         return@launch
                     }
                 } else {
@@ -169,10 +182,7 @@ class CreateListingViewModel : ViewModel() {
                     if (!hasTokens) {
                         val cost = tokenService.getTokenCost(state.tier)
                         Log.w(TAG, "⚠️ Insufficient tokens. Need: $cost")
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Insufficient tokens. You need ${cost} tokens for ${state.tier.displayName} listing."
-                        )
+                        setError("Insufficient tokens. You need ${cost} tokens for ${state.tier.displayName} listing.")
                         return@launch
                     }
                 }
@@ -190,10 +200,7 @@ class CreateListingViewModel : ViewModel() {
 
                 if (uploadedUrls.isEmpty()) {
                     Log.e(TAG, "❌ Image upload failed")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = "Image upload failed. Please try again."
-                    )
+                    setError("Image upload failed. Please try again.")
                     return@launch
                 }
 
@@ -241,18 +248,12 @@ class CreateListingViewModel : ViewModel() {
                     )
                 } else {
                     Log.e(TAG, "❌ Listing creation failed")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = "Failed to create listing. Please try again."
-                    )
+                    setError("Failed to create listing. Please try again.")
                 }
 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Exception during listing creation: ${e.message}", e)
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Error: ${e.message}"
-                )
+                setError("Error: ${e.message}")
             }
         }
     }

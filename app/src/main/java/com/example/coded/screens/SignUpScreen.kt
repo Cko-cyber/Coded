@@ -234,8 +234,8 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
                             try {
                                 // FIXED: Use correct parameters and handle AuthResult
                                 val result = authRepository.signUp(
-                                    mobileNumber = phone,
-                                    fullName = "$firstName $lastName",
+                                    mobile_number = phone,
+                                    full_name = "$firstName $lastName",
                                     email = email,
                                     password = password
                                 )

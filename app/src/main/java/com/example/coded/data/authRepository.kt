@@ -3,11 +3,10 @@ package com.example.coded.data
 import android.app.Activity
 import android.util.Log
 import com.google.firebase.FirebaseException
-import com.google.firebase.Timestamp
 import com.google.firebase.auth.*
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,310 +15,338 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 
+sealed class AuthResult {
+    object Success : AuthResult()
+    data class Error(val message: String) : AuthResult()
+}
+
+sealed class VerificationState {
+    object Idle : VerificationState()
+    object Loading : VerificationState()
+    data class CodeSent(
+        val verificationId: String,
+        val resendToken: PhoneAuthProvider.ForceResendingToken?
+    ) : VerificationState()
+    data class Error(val message: String) : VerificationState()
+    object Verified : VerificationState()
+}
+
 class AuthRepository {
-    private val auth: FirebaseAuth = Firebase.auth
-    private val userRepository = UserRepository()
-    private val firestore = FirebaseFirestore.getInstance()
+    private val auth = Firebase.auth
+    private val db = Firebase.firestore
+    private val TAG = "AuthRepository"
+    private val coroutineScope = CoroutineScope(Dispatchers.Main)
 
-    // Session timeout: 30 minutes of inactivity
-    private val SESSION_TIMEOUT_MS = 30 * 60 * 1000L
+    private val _verificationState = MutableStateFlow<VerificationState>(VerificationState.Idle)
+    val verificationState: StateFlow<VerificationState> = _verificationState
 
+    // Add current user state flow
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser
 
-    private var verificationId: String? = null
-    private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
+    // Store the verification ID and resend token
+    private var storedVerificationId: String? = null
+    private var storedResendToken: PhoneAuthProvider.ForceResendingToken? = null
 
     init {
-        val currentFirebaseUser = auth.currentUser
-        if (currentFirebaseUser != null) {
-            CoroutineScope(Dispatchers.IO).launch {
-                checkSessionValidity(currentFirebaseUser.uid)
+        // Listen for auth state changes
+        auth.addAuthStateListener { firebaseAuth ->
+            val user = firebaseAuth.currentUser
+            if (user != null) {
+                // Load user data from Firestore when user is authenticated
+                loadUserData(user.uid)
+            } else {
+                _currentUser.value = null
             }
         }
     }
 
-    // Check if session is still valid
-    private suspend fun checkSessionValidity(userId: String) {
-        try {
-            val doc = firestore.collection("users").document(userId).get().await()
-            if (doc.exists()) {
-                val lastActive = doc.getTimestamp("last_active")
-                val now = System.currentTimeMillis()
-                val lastActiveMs = lastActive?.toDate()?.time ?: 0
+    // Add this method to get current Firebase user
+    fun getCurrentFirebaseUser(): FirebaseUser? {
+        return auth.currentUser
+    }
 
-                if (now - lastActiveMs > SESSION_TIMEOUT_MS) {
-                    Log.w("AuthRepository", "Session expired - logging out")
-                    signOut()
+    // Load user data from Firestore
+    private fun loadUserData(userId: String) {
+        // You can use a coroutine scope here if needed, but for simplicity using callbacks
+        db.collection("users").document(userId).get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    val user = document.toObject(User::class.java)
+                    _currentUser.value = user
                 } else {
-                    loadUserData(userId)
-                    updateLastActive(userId)
+                    // Create a basic user object if document doesn't exist
+                    val firebaseUser = auth.currentUser
+                    _currentUser.value = User(
+                        id = userId,
+                        mobile_number = firebaseUser?.phoneNumber ?: "",
+                        full_name = firebaseUser?.displayName ?: "",
+                        email = firebaseUser?.email ?: "",
+                        location = "",
+                        profile_pic = "",
+                        token_balance = 5,
+                        free_listings_used = 0
+                    )
                 }
             }
-        } catch (e: Exception) {
-            Log.e("AuthRepository", "Error checking session", e)
-        }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Error loading user data: ${e.message}")
+                // Create a basic user object on failure
+                val firebaseUser = auth.currentUser
+                _currentUser.value = User(
+                    id = userId,
+                    mobile_number = firebaseUser?.phoneNumber ?: "",
+                    full_name = firebaseUser?.displayName ?: "",
+                    email = firebaseUser?.email ?: "",
+                    location = "",
+                    profile_pic = "",
+                    token_balance = 5,
+                    free_listings_used = 0
+                )
+            }
     }
 
-    // Update last active timestamp
-    suspend fun updateLastActive(userId: String? = null) {
-        val uid = userId ?: auth.currentUser?.uid ?: return
-        try {
-            firestore.collection("users")
-                .document(uid)
-                .update("last_active", Timestamp.now())
-                .await()
-        } catch (e: Exception) {
-            Log.e("AuthRepository", "Error updating last active", e)
-        }
-    }
-
-    private suspend fun loadUserData(userId: String) {
-        try {
-            val user = userRepository.getUser(userId)
+    // Add the missing updateUser method
+    suspend fun updateUser(user: User): Boolean {
+        return try {
+            db.collection("users").document(user.id).set(user.toMap()).await()
+            // Update the local state as well
             _currentUser.value = user
+            true
         } catch (e: Exception) {
-            Log.e("AuthRepository", "Error loading user data", e)
+            Log.e(TAG, "Error updating user: ${e.message}")
+            false
         }
     }
 
-    fun isUserLoggedIn(): Boolean = auth.currentUser != null
+    // Add method to update token balance specifically
+    suspend fun updateTokenBalance(userId: String, newBalance: Int): Boolean {
+        return try {
+            db.collection("users").document(userId).update(
+                mapOf(
+                    "token_balance" to newBalance,
+                    "updated_at" to com.google.firebase.Timestamp.now()
+                )
+            ).await()
 
+            // Update local state
+            val currentUser = _currentUser.value
+            if (currentUser != null) {
+                _currentUser.value = currentUser.copy(token_balance = newBalance)
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating token balance: ${e.message}")
+            false
+        }
+    }
+
+    // Add method to add tokens (for purchases)
+    suspend fun addTokens(userId: String, tokensToAdd: Int): Boolean {
+        return try {
+            val currentUser = _currentUser.value
+            if (currentUser != null) {
+                val newBalance = currentUser.token_balance + tokensToAdd
+                updateTokenBalance(userId, newBalance)
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding tokens: ${e.message}")
+            false
+        }
+    }
+
+    // UPDATED: Email authentication method with user profile creation
     suspend fun signUp(
-        mobileNumber: String,
-        fullName: String,
         email: String,
-        password: String
+        password: String,
+        mobile_number: String = "",
+        full_name: String = "",
+        location: String = ""
     ): AuthResult {
         return try {
-            // Check for duplicate user
-            val duplicateCheck = checkDuplicateUser(email, mobileNumber)
-            if (duplicateCheck.isDuplicate) {
-                return AuthResult.Error(duplicateCheck.message)
-            }
-
-            // Validate inputs
-            if (fullName.isBlank() || fullName.length < 2) {
-                return AuthResult.Error("Please enter a valid full name")
-            }
-
-            if (!isValidEmail(email)) {
-                return AuthResult.Error("Please enter a valid email address")
-            }
-
-            if (password.length < 6) {
-                return AuthResult.Error("Password must be at least 6 characters")
-            }
-
-            // Create Firebase auth user
+            // Create user with email and password
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
-            val firebaseUser = authResult.user ?: return AuthResult.Error("User creation failed")
+            val user = authResult.user
 
-            // Update profile
-            val profileUpdates = UserProfileChangeRequest.Builder()
-                .setDisplayName(fullName)
-                .build()
-            firebaseUser.updateProfile(profileUpdates).await()
+            if (user != null) {
+                // Create user profile in Firestore
+                val newUser = User(
+                    id = user.uid,
+                    mobile_number = mobile_number,
+                    full_name = full_name,
+                    email = email,
+                    location = location,
+                    profile_pic = "",
+                    token_balance = 5,
+                    free_listings_used = 0,
+                    created_at = com.google.firebase.Timestamp.now(),
+                    updated_at = com.google.firebase.Timestamp.now(),
+                    last_active = com.google.firebase.Timestamp.now()
+                )
 
-            // Create Firestore user document with proper field names
-            val user = User(
-                id = firebaseUser.uid,
-                mobile_number = mobileNumber,
-                full_name = fullName,
-                email = email,
-                location = "",
-                profile_pic = "",
-                token_balance = 5, // Starting tokens
-                free_listings_used = 0,
-                free_listings_reset_date = Timestamp.now(),
-                created_at = Timestamp.now(),
-                updated_at = Timestamp.now(),
-                last_active = Timestamp.now()
-            )
+                // Save user to Firestore
+                db.collection("users").document(user.uid).set(newUser.toMap()).await()
 
-            // Save to Firestore using the toMap() method
-            firestore.collection("users")
-                .document(firebaseUser.uid)
-                .set(user.toMap())
-                .await()
+                // Update local state
+                _currentUser.value = newUser
 
-            _currentUser.value = user
-            Log.d("AuthRepository", "✅ User created successfully: ${user.id}")
-            AuthResult.Success(user)
-
-        } catch (e: FirebaseAuthUserCollisionException) {
-            Log.e("AuthRepository", "Email collision", e)
-            AuthResult.Error("This email is already registered")
-        } catch (e: FirebaseAuthWeakPasswordException) {
-            Log.e("AuthRepository", "Weak password", e)
-            AuthResult.Error("Password is too weak. Please use a stronger password")
-        } catch (e: FirebaseAuthInvalidCredentialsException) {
-            Log.e("AuthRepository", "Invalid credentials", e)
-            AuthResult.Error("Invalid email format")
-        } catch (e: Exception) {
-            Log.e("AuthRepository", "Sign-up failed", e)
-            AuthResult.Error(e.message ?: "Failed to create account. Please try again.")
-        }
-    }
-
-    private fun isValidEmail(email: String): Boolean {
-        return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
-    }
-
-    private data class DuplicateCheckResult(val isDuplicate: Boolean, val message: String = "")
-
-    private suspend fun checkDuplicateUser(email: String, phone: String): DuplicateCheckResult {
-        return try {
-            val emailQuery = firestore.collection("users")
-                .whereEqualTo("email", email)
-                .get()
-                .await()
-
-            val phoneQuery = firestore.collection("users")
-                .whereEqualTo("mobile_number", phone)
-                .get()
-                .await()
-
-            when {
-                !emailQuery.isEmpty && !phoneQuery.isEmpty ->
-                    DuplicateCheckResult(true, "Email and phone number already registered")
-                !emailQuery.isEmpty ->
-                    DuplicateCheckResult(true, "This email is already registered")
-                !phoneQuery.isEmpty ->
-                    DuplicateCheckResult(true, "This phone number is already registered")
-                else -> DuplicateCheckResult(false)
+                AuthResult.Success
+            } else {
+                AuthResult.Error("User creation failed")
             }
         } catch (e: Exception) {
-            Log.e("AuthRepository", "Error checking duplicates", e)
-            DuplicateCheckResult(false)
+            AuthResult.Error(e.message ?: "Sign up failed")
         }
     }
 
     suspend fun signIn(email: String, password: String): AuthResult {
         return try {
-            val authResult = auth.signInWithEmailAndPassword(email, password).await()
-            val firebaseUser = authResult.user ?: return AuthResult.Error("Sign in failed")
-
-            val user = userRepository.getUser(firebaseUser.uid)
-            if (user != null) {
-                _currentUser.value = user
-                updateLastActive(firebaseUser.uid)
-                AuthResult.Success(user)
-            } else {
-                AuthResult.Error("User profile not found. Please contact support.")
-            }
-        } catch (e: FirebaseAuthInvalidUserException) {
-            AuthResult.Error("No account found with this email")
-        } catch (e: FirebaseAuthInvalidCredentialsException) {
-            AuthResult.Error("Incorrect password")
+            auth.signInWithEmailAndPassword(email, password).await()
+            AuthResult.Success
         } catch (e: Exception) {
-            Log.e("AuthRepository", "Sign-in failed", e)
-            AuthResult.Error(e.message ?: "Login failed. Please try again.")
-        }
-    }
-
-    suspend fun updateUser(user: User): Boolean {
-        return try {
-            val updatedUser = user.copy(
-                updated_at = Timestamp.now(),
-                last_active = Timestamp.now()
-            )
-
-            firestore.collection("users")
-                .document(user.id)
-                .set(updatedUser.toMap())
-                .await()
-
-            _currentUser.value = updatedUser
-            Log.d("AuthRepository", "✅ User updated successfully")
-            true
-        } catch (e: Exception) {
-            Log.e("AuthRepository", "Update user failed", e)
-            false
-        }
-    }
-
-    // Phone verification methods (keep existing implementation)
-    suspend fun sendPhoneVerification(phoneNumber: String, activity: Activity): AuthResult {
-        return try {
-            val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-                override fun onVerificationCompleted(credential: PhoneAuthCredential) {}
-                override fun onVerificationFailed(e: FirebaseException) {
-                    Log.e("AuthRepository", "Phone verification failed: ${e.message}")
-                }
-                override fun onCodeSent(
-                    vId: String,
-                    token: PhoneAuthProvider.ForceResendingToken
-                ) {
-                    verificationId = vId
-                    resendToken = token
-                }
-            }
-
-            val options = PhoneAuthOptions.newBuilder(auth)
-                .setPhoneNumber(phoneNumber)
-                .setTimeout(60L, TimeUnit.SECONDS)
-                .setActivity(activity)
-                .setCallbacks(callbacks)
-                .build()
-
-            PhoneAuthProvider.verifyPhoneNumber(options)
-            AuthResult.Success(User(id = "pending"))
-        } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Failed to send verification code")
-        }
-    }
-
-    suspend fun verifyPhoneOTP(code: String): AuthResult {
-        return try {
-            val credential = PhoneAuthProvider.getCredential(verificationId ?: "", code)
-            val authResult = auth.signInWithCredential(credential).await()
-            val firebaseUser = authResult.user ?: return AuthResult.Error("Verification failed")
-
-            var user = userRepository.getUser(firebaseUser.uid)
-            if (user == null) {
-                user = User(
-                    id = firebaseUser.uid,
-                    mobile_number = firebaseUser.phoneNumber ?: "",
-                    full_name = firebaseUser.displayName ?: "User",
-                    email = firebaseUser.email ?: "",
-                    token_balance = 5,
-                    free_listings_used = 0
-                )
-                firestore.collection("users")
-                    .document(firebaseUser.uid)
-                    .set(user.toMap())
-                    .await()
-            }
-
-            _currentUser.value = user
-            updateLastActive(firebaseUser.uid)
-            AuthResult.Success(user)
-        } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Invalid verification code")
+            AuthResult.Error(e.message ?: "Sign in failed")
         }
     }
 
     fun signOut() {
         auth.signOut()
+        _verificationState.value = VerificationState.Idle
         _currentUser.value = null
-        verificationId = null
-        resendToken = null
-        Log.d("AuthRepository", "User signed out")
+        storedVerificationId = null
+        storedResendToken = null
     }
 
-    fun getCurrentFirebaseUser(): FirebaseUser? = auth.currentUser
+    fun getCurrentUser() = auth.currentUser
 
-    suspend fun refreshUserData() {
-        val firebaseUser = auth.currentUser
-        if (firebaseUser != null) {
-            loadUserData(firebaseUser.uid)
-            updateLastActive(firebaseUser.uid)
+    // Phone authentication methods - these are NOT suspend functions because they use callbacks
+    fun sendPhoneVerification(phoneNumber: String, activity: Activity) {
+        _verificationState.value = VerificationState.Loading
+
+        val options = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(phoneNumber)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                    Log.d(TAG, "Verification completed automatically")
+                    // Use a coroutine to handle the sign-in
+                    coroutineScope.launch {
+                        signInWithPhoneAuthCredential(credential)
+                    }
+                }
+
+                override fun onVerificationFailed(e: FirebaseException) {
+                    Log.e(TAG, "Verification failed: ${e.message}")
+                    _verificationState.value = VerificationState.Error(e.message ?: "Verification failed")
+                }
+
+                override fun onCodeSent(
+                    verificationId: String,
+                    token: PhoneAuthProvider.ForceResendingToken
+                ) {
+                    Log.d(TAG, "OTP code sent")
+                    storedVerificationId = verificationId
+                    storedResendToken = token
+                    _verificationState.value = VerificationState.CodeSent(
+                        verificationId = verificationId,
+                        resendToken = token
+                    )
+                }
+            })
+            .build()
+
+        PhoneAuthProvider.verifyPhoneNumber(options)
+    }
+
+    fun resendPhoneVerification(phoneNumber: String, activity: Activity) {
+        _verificationState.value = VerificationState.Loading
+
+        val resendToken = storedResendToken
+
+        val optionsBuilder = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(phoneNumber)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                    Log.d(TAG, "Verification completed automatically")
+                    coroutineScope.launch {
+                        signInWithPhoneAuthCredential(credential)
+                    }
+                }
+
+                override fun onVerificationFailed(e: FirebaseException) {
+                    Log.e(TAG, "Verification failed: ${e.message}")
+                    _verificationState.value = VerificationState.Error(e.message ?: "Verification failed")
+                }
+
+                override fun onCodeSent(
+                    verificationId: String,
+                    token: PhoneAuthProvider.ForceResendingToken
+                ) {
+                    Log.d(TAG, "OTP code resent")
+                    storedVerificationId = verificationId
+                    storedResendToken = token
+                    _verificationState.value = VerificationState.CodeSent(
+                        verificationId = verificationId,
+                        resendToken = token
+                    )
+                }
+            })
+
+        // Only set force resending token if we have one
+        resendToken?.let {
+            optionsBuilder.setForceResendingToken(it)
+        }
+
+        PhoneAuthProvider.verifyPhoneNumber(optionsBuilder.build())
+    }
+
+    suspend fun verifyPhoneOTP(code: String): AuthResult {
+        return try {
+            _verificationState.value = VerificationState.Loading
+
+            val verificationId = storedVerificationId
+            if (verificationId == null) {
+                _verificationState.value = VerificationState.Error("No verification in progress")
+                return AuthResult.Error("No verification in progress")
+            }
+
+            val credential = PhoneAuthProvider.getCredential(verificationId, code)
+            signInWithPhoneAuthCredential(credential)
+
+            // Check if sign-in was successful
+            if (auth.currentUser != null) {
+                AuthResult.Success
+            } else {
+                AuthResult.Error("Authentication failed")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "OTP verification failed: ${e.message}")
+            _verificationState.value = VerificationState.Error(e.message ?: "OTP verification failed")
+            AuthResult.Error(e.message ?: "OTP verification failed")
         }
     }
-}
 
-sealed class AuthResult {
-    data class Success(val user: User) : AuthResult()
-    data class Error(val message: String) : AuthResult()
+    private suspend fun signInWithPhoneAuthCredential(credential: PhoneAuthCredential) {
+        try {
+            auth.signInWithCredential(credential).await()
+            _verificationState.value = VerificationState.Verified
+            Log.d(TAG, "Phone authentication successful")
+        } catch (e: Exception) {
+            Log.e(TAG, "Phone authentication failed: ${e.message}")
+            _verificationState.value = VerificationState.Error(e.message ?: "Authentication failed")
+            throw e // Re-throw to handle in calling function
+        }
+    }
+
+    // Method to manually refresh user data
+    fun refreshUserData() {
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            loadUserData(currentUser.uid)
+        }
+    }
 }

@@ -1,33 +1,57 @@
 package com.example.coded.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import coil.compose.rememberAsyncImagePainter
+import com.example.coded.R
 import com.example.coded.data.AuthRepository
+import com.example.coded.data.ProfilePictureUploader
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditProfileScreen(navController: NavController, authRepository: AuthRepository) {
+    val context = LocalContext.current
     val currentUser by authRepository.currentUser.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     var fullName by remember { mutableStateOf(currentUser?.full_name ?: "") }
     var mobileNumber by remember { mutableStateOf(currentUser?.mobile_number ?: "") }
     var location by remember { mutableStateOf(currentUser?.location ?: "") }
+    var profilePicUri by remember { mutableStateOf<Uri?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var isUploadingPic by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf(0f) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
 
-    // Update fields when user data loads
+    // Image picker
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        profilePicUri = uri
+    }
+
     LaunchedEffect(currentUser) {
         currentUser?.let {
             fullName = it.full_name
@@ -58,17 +82,91 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (currentUser == null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = androidx.compose.ui.Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
+                CircularProgressIndicator()
                 return@Scaffold
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Profile Picture Section
+            Box(
+                modifier = Modifier.size(140.dp)
+            ) {
+                // Profile Image
+                Box(
+                    modifier = Modifier
+                        .size(140.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF013B33))
+                        .clickable { imagePickerLauncher.launch("image/*") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (profilePicUri != null) {
+                        Image(
+                            painter = rememberAsyncImagePainter(profilePicUri),
+                            contentDescription = "Profile Picture",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (!currentUser?.profile_pic.isNullOrEmpty()) {
+                        Image(
+                            painter = rememberAsyncImagePainter(currentUser?.profile_pic),
+                            contentDescription = "Profile Picture",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = Color.White
+                        )
+                    }
+
+                    // Upload progress overlay
+                    if (isUploadingPic) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                progress = uploadProgress,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+
+                // Camera icon button
+                FloatingActionButton(
+                    onClick = { imagePickerLauncher.launch("image/*") },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(40.dp),
+                    containerColor = Color(0xFFFF6F00)
+                ) {
+                    Icon(
+                        Icons.Default.CameraAlt,
+                        contentDescription = "Change Picture",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = "Tap to change profile picture",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
+            )
 
             // Full Name
             OutlinedTextField(
@@ -110,11 +208,7 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 leadingIcon = { Icon(Icons.Default.Email, null) },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = false,
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledBorderColor = Color.Gray,
-                    disabledLabelColor = Color.Gray
-                )
+                singleLine = true
             )
 
             Text(
@@ -142,7 +236,7 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Error Message
+            // Error/Success Messages
             errorMessage?.let {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -152,45 +246,28 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Error,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
-                        )
+                        Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
+                        Text(it, color = MaterialTheme.colorScheme.onErrorContainer)
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Success Message
             successMessage?.let {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFFE8F5E9)
-                    )
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9))
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = Color(0xFF4CAF50)
-                        )
+                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = it,
-                            color = Color(0xFF2E7D32)
-                        )
+                        Text(it, color = Color(0xFF2E7D32))
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -200,59 +277,68 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
             Button(
                 onClick = {
                     coroutineScope.launch {
-                        // Validate
                         when {
-                            fullName.isBlank() -> {
-                                errorMessage = "Full name is required"
-                                return@launch
-                            }
-                            fullName.length < 2 -> {
-                                errorMessage = "Full name must be at least 2 characters"
-                                return@launch
-                            }
-                            mobileNumber.isBlank() -> {
-                                errorMessage = "Mobile number is required"
-                                return@launch
-                            }
-                            location.isBlank() -> {
-                                errorMessage = "Location is required"
-                                return@launch
+                            fullName.isBlank() -> errorMessage = "Full name is required"
+                            fullName.length < 2 -> errorMessage = "Full name must be at least 2 characters"
+                            mobileNumber.isBlank() -> errorMessage = "Mobile number is required"
+                            location.isBlank() -> errorMessage = "Location is required"
+                            else -> {
+                                isLoading = true
+                                errorMessage = null
+                                successMessage = null
+
+                                var profilePicUrl = currentUser?.profile_pic ?: ""
+
+                                // Upload profile picture if changed
+                                if (profilePicUri != null) {
+                                    isUploadingPic = true
+                                    val uploadResult = ProfilePictureUploader.uploadProfilePicture(
+                                        context = context,
+                                        uri = profilePicUri!!,
+                                        userId = currentUser!!.id
+                                    ) { progress ->
+                                        uploadProgress = progress
+                                    }
+                                    isUploadingPic = false
+
+                                    if (uploadResult.isSuccess) {
+                                        profilePicUrl = uploadResult.getOrNull() ?: profilePicUrl
+                                    } else {
+                                        errorMessage = "Failed to upload profile picture"
+                                        isLoading = false
+                                        return@launch
+                                    }
+                                }
+
+                                val updatedUser = currentUser!!.copy(
+                                    full_name = fullName.trim(),
+                                    mobile_number = mobileNumber.trim(),
+                                    location = location.trim(),
+                                    profile_pic = profilePicUrl
+                                )
+
+                                val success = authRepository.updateUser(updatedUser)
+
+                                if (success) {
+                                    successMessage = "Profile updated successfully!"
+                                    kotlinx.coroutines.delay(1500)
+                                    navController.popBackStack()
+                                } else {
+                                    errorMessage = "Failed to update profile"
+                                }
+
+                                isLoading = false
                             }
                         }
-
-                        isLoading = true
-                        errorMessage = null
-                        successMessage = null
-
-                        val updatedUser = currentUser!!.copy(
-                            full_name = fullName.trim(),
-                            mobile_number = mobileNumber.trim(),
-                            location = location.trim()
-                        )
-
-                        val success = authRepository.updateUser(updatedUser)
-
-                        if (success) {
-                            successMessage = "Profile updated successfully!"
-                            // Navigate back after a delay
-                            kotlinx.coroutines.delay(1500)
-                            navController.popBackStack()
-                        } else {
-                            errorMessage = "Failed to update profile. Please try again."
-                        }
-
-                        isLoading = false
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF013B33)
-                ),
-                enabled = !isLoading
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF013B33)),
+                enabled = !isLoading && !isUploadingPic
             ) {
-                if (isLoading) {
+                if (isLoading || isUploadingPic) {
                     CircularProgressIndicator(
                         color = Color.White,
                         modifier = Modifier.size(24.dp)
@@ -266,7 +352,6 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Cancel Button
             OutlinedButton(
                 onClick = { navController.popBackStack() },
                 modifier = Modifier.fillMaxWidth()

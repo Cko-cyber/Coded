@@ -339,9 +339,9 @@ fun SingleStockScreen(navController: NavController, listingId: String, authRepos
                                     color = Color(0xFF013B33)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text("${it.fullName}")
-                                if (it.mobileNumber.isNotEmpty()) {
-                                    Text("Phone: ${it.mobileNumber}")
+                                Text("${it.full_name}")
+                                if (it.mobile_number.isNotEmpty()) {
+                                    Text("Phone: ${it.mobile_number}")
                                 }
                                 if (it.location.isNotEmpty()) {
                                     Text("Location: ${it.location}")

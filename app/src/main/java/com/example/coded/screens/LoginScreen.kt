@@ -24,13 +24,14 @@ import androidx.navigation.NavController
 import com.example.coded.R
 import com.example.coded.data.AuthRepository
 import com.example.coded.data.AuthResult
+import com.example.coded.data.VerificationState
 import com.example.coded.navigation.Screen
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(navController: NavController, authRepository: AuthRepository) {
-    var selectedLoginMethod by remember { mutableStateOf(LoginMethod.PHONE) } // Default to phone for farmers
+    var selectedLoginMethod by remember { mutableStateOf(LoginMethod.PHONE) }
 
     // Email login state
     var email by remember { mutableStateOf("") }
@@ -51,11 +52,47 @@ fun LoginScreen(navController: NavController, authRepository: AuthRepository) {
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // Observe verification state for phone authentication
+    val verificationState by authRepository.verificationState.collectAsState()
+
     // Countdown timer for OTP resend
     LaunchedEffect(countdown) {
         if (countdown > 0) {
             kotlinx.coroutines.delay(1000)
             countdown--
+        }
+    }
+
+    // Handle verification state changes
+    LaunchedEffect(verificationState) {
+        when (verificationState) {
+            is VerificationState.CodeSent -> {
+                isLoading = false
+                isOtpSent = true
+                countdown = 60
+                val fullPhoneNumber = "+268${phoneNumber.filter { it.isDigit() }}"
+                successMessage = "OTP sent to $fullPhoneNumber"
+                errorMessage = null
+            }
+            is VerificationState.Verified -> {
+                isLoading = false
+                navController.navigate(Screen.MainHome.route) {
+                    popUpTo(Screen.Login.route) { inclusive = true }
+                }
+            }
+            is VerificationState.Error -> {
+                isLoading = false
+                errorMessage = (verificationState as VerificationState.Error).message
+                successMessage = null
+            }
+            is VerificationState.Loading -> {
+                isLoading = true
+                errorMessage = null
+                successMessage = null
+            }
+            else -> {
+                // Idle state - do nothing
+            }
         }
     }
 
@@ -148,7 +185,6 @@ fun LoginScreen(navController: NavController, authRepository: AuthRepository) {
                         }
                     },
                     onForgotPasswordClick = {
-                        // TODO: Implement forgot password flow
                         errorMessage = "Forgot password feature coming soon!"
                     }
                 )
@@ -163,29 +199,11 @@ fun LoginScreen(navController: NavController, authRepository: AuthRepository) {
                     countdown = countdown,
                     isLoading = isLoading,
                     onSendOtpClick = {
-                        coroutineScope.launch {
-                            isLoading = true
-                            errorMessage = null
-                            successMessage = null
-                            try {
-                                val fullPhoneNumber = "+268${phoneNumber.filter { it.isDigit() }}"
-                                val result = authRepository.sendPhoneVerification(fullPhoneNumber, context as Activity)
-                                isLoading = false
-                                when (result) {
-                                    is AuthResult.Success -> {
-                                        isOtpSent = true
-                                        countdown = 60
-                                        successMessage = "OTP sent to $fullPhoneNumber"
-                                    }
-                                    is AuthResult.Error -> {
-                                        errorMessage = result.message
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                isLoading = false
-                                errorMessage = e.message ?: "Failed to send OTP. Please try again."
-                            }
-                        }
+                        isLoading = true
+                        errorMessage = null
+                        successMessage = null
+                        val fullPhoneNumber = "+268${phoneNumber.filter { it.isDigit() }}"
+                        authRepository.sendPhoneVerification(fullPhoneNumber, context as Activity)
                     },
                     onVerifyOtpClick = {
                         coroutineScope.launch {
@@ -194,14 +212,12 @@ fun LoginScreen(navController: NavController, authRepository: AuthRepository) {
                             successMessage = null
                             try {
                                 val result = authRepository.verifyPhoneOTP(otpCode)
-                                isLoading = false
                                 when (result) {
                                     is AuthResult.Success -> {
-                                        navController.navigate(Screen.MainHome.route) {
-                                            popUpTo(Screen.Login.route) { inclusive = true }
-                                        }
+                                        // Navigation will be handled by the verification state observer
                                     }
                                     is AuthResult.Error -> {
+                                        isLoading = false
                                         errorMessage = result.message
                                     }
                                 }
@@ -212,28 +228,11 @@ fun LoginScreen(navController: NavController, authRepository: AuthRepository) {
                         }
                     },
                     onResendOtpClick = {
-                        coroutineScope.launch {
-                            isLoading = true
-                            errorMessage = null
-                            successMessage = null
-                            try {
-                                val fullPhoneNumber = "+268${phoneNumber.filter { it.isDigit() }}"
-                                val result = authRepository.resendPhoneVerification(fullPhoneNumber, context as Activity)
-                                isLoading = false
-                                when (result) {
-                                    is AuthResult.Success -> {
-                                        countdown = 60
-                                        successMessage = "OTP resent to $fullPhoneNumber"
-                                    }
-                                    is AuthResult.Error -> {
-                                        errorMessage = result.message
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                isLoading = false
-                                errorMessage = e.message ?: "Failed to resend OTP. Please try again."
-                            }
-                        }
+                        isLoading = true
+                        errorMessage = null
+                        successMessage = null
+                        val fullPhoneNumber = "+268${phoneNumber.filter { it.isDigit() }}"
+                        authRepository.resendPhoneVerification(fullPhoneNumber, context as Activity)
                     }
                 )
             }
@@ -413,9 +412,8 @@ fun PhoneLoginForm(
         OutlinedTextField(
             value = phoneNumber,
             onValueChange = { newValue ->
-                // Only allow numbers and auto-format
                 val cleaned = newValue.filter { it.isDigit() }
-                if (cleaned.length <= 8) { // Eswatini numbers are 8 digits after +268
+                if (cleaned.length <= 8) {
                     onPhoneNumberChange(cleaned.formatPhoneNumber())
                 }
             },
@@ -455,7 +453,6 @@ fun PhoneLoginForm(
             OutlinedTextField(
                 value = otpCode,
                 onValueChange = { newValue ->
-                    // Only allow numbers and limit to 6 digits
                     val cleaned = newValue.filter { it.isDigit() }
                     if (cleaned.length <= 6) {
                         onOtpChange(cleaned)
@@ -564,15 +561,9 @@ private fun String.formatPhoneNumber(): String {
 // Function to validate Eswatini phone numbers
 private fun isValidEswatiniPhoneNumber(phoneNumber: String): Boolean {
     val cleaned = phoneNumber.filter { it.isDigit() }
-
-    // Must be exactly 8 digits
     if (cleaned.length != 8) return false
-
-    // Check if it starts with valid Eswatini prefixes
     val validPrefixes = listOf("76", "78", "79")
-    val hasValidPrefix = validPrefixes.any { cleaned.startsWith(it) }
-
-    return hasValidPrefix
+    return validPrefixes.any { cleaned.startsWith(it) }
 }
 
 // Login method enum

@@ -21,7 +21,7 @@ fun NavGraph(
     ) {
         // Splash Screen
         composable(Screen.Splash.route) {
-            SplashScreen(navController, authRepository)
+            SplashScreen(navController)
         }
 
         // Auth Flow
