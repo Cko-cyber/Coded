@@ -47,7 +47,7 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
+            .background(Color(0xFF013B33)) // ✅ Dark green background
             .verticalScroll(scrollState)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -67,13 +67,13 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
             text = "Create Account",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF013B33)
+            color = Color.White // ✅ White text on dark background
         )
 
         Text(
             text = "Join the livestock trading community",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray,
+            color = Color.White.copy(alpha = 0.8f), // ✅ Semi-transparent white
             modifier = Modifier.padding(top = 8.dp, bottom = 32.dp)
         )
 
@@ -81,13 +81,18 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
         OutlinedTextField(
             value = firstName,
             onValueChange = { firstName = it },
-            label = { Text("First Name") },
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+            label = { Text("First Name", color = Color.White) },
+            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color.White) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF013B33),
-                focusedLabelColor = Color(0xFF013B33)
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFFFFD700),
+                unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
+                focusedLabelColor = Color(0xFFFFD700),
+                unfocusedLabelColor = Color.White.copy(alpha = 0.8f),
+                cursorColor = Color(0xFFFFD700)
             )
         )
 
@@ -97,13 +102,18 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
         OutlinedTextField(
             value = lastName,
             onValueChange = { lastName = it },
-            label = { Text("Last Name") },
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+            label = { Text("Last Name", color = Color.White) },
+            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color.White) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF013B33),
-                focusedLabelColor = Color(0xFF013B33)
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFFFFD700),
+                unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
+                focusedLabelColor = Color(0xFFFFD700),
+                unfocusedLabelColor = Color.White.copy(alpha = 0.8f),
+                cursorColor = Color(0xFFFFD700)
             )
         )
 
@@ -113,13 +123,18 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
         OutlinedTextField(
             value = phone,
             onValueChange = { phone = it },
-            label = { Text("Phone Number") },
-            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+            label = { Text("Phone Number", color = Color.White) },
+            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Color.White) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF013B33),
-                focusedLabelColor = Color(0xFF013B33)
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFFFFD700),
+                unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
+                focusedLabelColor = Color(0xFFFFD700),
+                unfocusedLabelColor = Color.White.copy(alpha = 0.8f),
+                cursorColor = Color(0xFFFFD700)
             )
         )
 
@@ -129,13 +144,18 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
-            label = { Text("Email") },
-            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+            label = { Text("Email", color = Color.White) },
+            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = Color.White) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF013B33),
-                focusedLabelColor = Color(0xFF013B33)
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFFFFD700),
+                unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
+                focusedLabelColor = Color(0xFFFFD700),
+                unfocusedLabelColor = Color.White.copy(alpha = 0.8f),
+                cursorColor = Color(0xFFFFD700)
             )
         )
 
@@ -145,13 +165,18 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
         OutlinedTextField(
             value = location,
             onValueChange = { location = it },
-            label = { Text("Location") },
-            leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+            label = { Text("Location", color = Color.White) },
+            leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF013B33),
-                focusedLabelColor = Color(0xFF013B33)
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFFFFD700),
+                unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
+                focusedLabelColor = Color(0xFFFFD700),
+                unfocusedLabelColor = Color.White.copy(alpha = 0.8f),
+                cursorColor = Color(0xFFFFD700)
             )
         )
 
@@ -161,13 +186,14 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Password") },
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+            label = { Text("Password", color = Color.White) },
+            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Color.White) },
             trailingIcon = {
                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                        tint = Color.White
                     )
                 }
             },
@@ -175,8 +201,13 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF013B33),
-                focusedLabelColor = Color(0xFF013B33)
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFFFFD700),
+                unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
+                focusedLabelColor = Color(0xFFFFD700),
+                unfocusedLabelColor = Color.White.copy(alpha = 0.8f),
+                cursorColor = Color(0xFFFFD700)
             )
         )
 
@@ -186,13 +217,14 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
         OutlinedTextField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
-            label = { Text("Confirm Password") },
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+            label = { Text("Confirm Password", color = Color.White) },
+            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Color.White) },
             trailingIcon = {
                 IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
                     Icon(
                         imageVector = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (confirmPasswordVisible) "Hide password" else "Show password"
+                        contentDescription = if (confirmPasswordVisible) "Hide password" else "Show password",
+                        tint = Color.White
                     )
                 }
             },
@@ -200,8 +232,13 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF013B33),
-                focusedLabelColor = Color(0xFF013B33)
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color(0xFFFFD700),
+                unfocusedBorderColor = Color.White.copy(alpha = 0.6f),
+                focusedLabelColor = Color(0xFFFFD700),
+                unfocusedLabelColor = Color.White.copy(alpha = 0.8f),
+                cursorColor = Color(0xFFFFD700)
             )
         )
 
@@ -209,12 +246,20 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
 
         // Error Message
         errorMessage?.let {
-            Text(
-                text = it,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            Surface(
+                color = Color.Red.copy(alpha = 0.9f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Text(
+                    text = it,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
         }
 
         // Sign Up Button
@@ -232,18 +277,19 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
                             isLoading = true
                             errorMessage = null
                             try {
-                                // FIXED: Use correct parameters and handle AuthResult
+                                // ✅ CORRECTED: Use the proper parameter names
                                 val result = authRepository.signUp(
+                                    email = email,
+                                    password = password,
                                     mobile_number = phone,
                                     full_name = "$firstName $lastName",
-                                    email = email,
-                                    password = password
+                                    location = location
                                 )
                                 isLoading = false
                                 when (result) {
                                     is AuthResult.Success -> {
-                                        navController.navigate(Screen.MainHome.route) {
-                                            popUpTo(Screen.Signup.route) { inclusive = true }
+                                        navController.navigate("main_home") {
+                                            popUpTo("signup") { inclusive = true }
                                         }
                                     }
                                     is AuthResult.Error -> {
@@ -261,7 +307,7 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF013B33)),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700)),
             shape = RoundedCornerShape(12.dp),
             enabled = !isLoading &&
                     firstName.isNotEmpty() &&
@@ -273,14 +319,15 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
         ) {
             if (isLoading) {
                 CircularProgressIndicator(
-                    color = Color.White,
+                    color = Color(0xFF013B33),
                     modifier = Modifier.size(24.dp)
                 )
             } else {
                 Text(
                     text = "Sign Up",
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF013B33)
                 )
             }
         }
@@ -295,12 +342,12 @@ fun SignUpScreen(navController: NavController, authRepository: AuthRepository) {
             Text(
                 text = "Already have an account? ",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
+                color = Color.White.copy(alpha = 0.8f)
             )
             Text(
                 text = "Login",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF013B33),
+                color = Color(0xFFFFD700),
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.clickable {
                     navController.popBackStack()

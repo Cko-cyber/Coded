@@ -18,7 +18,6 @@ fun NavGraph(
         navController = navController,
         startDestination = if (authRepository.isUserLoggedIn()) Screen.MainHome.route else Screen.Login.route
     ) {
-        // REMOVED: Splash screen - no longer needed
         // Auth Flow
         composable(Screen.Login.route) {
             LoginScreen(navController, authRepository)
@@ -45,8 +44,36 @@ fun NavGraph(
             ProfileScreen(navController, authRepository)
         }
 
+        // ✅ Messages with optional parameters for direct chat
+        composable(
+            route = "${Screen.Messages.route}?listingId={listingId}&sellerId={sellerId}",
+            arguments = listOf(
+                navArgument("listingId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("sellerId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId")
+            val sellerId = backStackEntry.arguments?.getString("sellerId")
+
+            MessagesScreen(
+                navController = navController,
+                authRepository = authRepository,
+                listingId = listingId,
+                sellerId = sellerId
+            )
+        }
+
+        // ✅ Also support simple messages route
         composable(Screen.Messages.route) {
-            MessagesScreen(navController, authRepository) // NOW WORKS - already imported
+            MessagesScreen(navController, authRepository)
         }
 
         composable(
@@ -55,30 +82,6 @@ fun NavGraph(
         ) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
             SingleStockScreen(navController, listingId, authRepository)
-        }
-        // Add these composables to your NavGraph
-        composable(
-            route = "book_call/{listingId}/{sellerId}",
-            arguments = listOf(
-                navArgument("listingId") { type = NavType.StringType },
-                navArgument("sellerId") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
-            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
-            BookCallScreen(navController, listingId, sellerId, authRepository)
-        }
-
-        composable(
-            route = "schedule_viewing/{listingId}/{sellerId}",
-            arguments = listOf(
-                navArgument("listingId") { type = NavType.StringType },
-                navArgument("sellerId") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
-            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
-            ScheduleViewingScreen(navController, listingId, sellerId, authRepository)
         }
 
         // Profile Sub-screens

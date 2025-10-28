@@ -1,111 +1,102 @@
 package com.example.coded.viewmodels
 
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coded.data.Listing
 import com.example.coded.data.ListingRepository
+import com.example.coded.data.ListingTier
 import com.example.coded.data.User
 import com.example.coded.data.UserRepository
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 class SingleStockViewModel : ViewModel() {
     private val listingRepository = ListingRepository()
     private val userRepository = UserRepository()
-    private val firestore = FirebaseFirestore.getInstance()
 
-    private val _listing = MutableStateFlow<Listing?>(null)
-    val listing: StateFlow<Listing?> = _listing
+    // Use mutableStateOf for Compose state
+    private val _listing = mutableStateOf<Listing?>(null)
+    val listing: State<Listing?> get() = _listing
 
-    private val _seller = MutableStateFlow<User?>(null)
-    val seller: StateFlow<User?> = _seller
+    private val _seller = mutableStateOf<User?>(null)
+    val seller: State<User?> get() = _seller
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading
+    private val _isLoading = mutableStateOf(false)
+    val isLoading: State<Boolean> get() = _isLoading
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error
-
-    // NEW: Shortlist state
-    private val _isInShortlist = MutableStateFlow(false)
-    val isInShortlist: StateFlow<Boolean> = _isInShortlist
+    private val _error = mutableStateOf<String?>(null)
+    val error: State<String?> get() = _error
 
     fun loadListing(listingId: String) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _error.value = null
+        if (listingId.isBlank()) {
+            _error.value = "Invalid listing ID"
+            return
+        }
 
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val listingData = listingRepository.getListingById(listingId)
-                _listing.value = listingData
-
-                // Load seller information
-                listingData?.let { listing ->
-                    val sellerData = userRepository.getUser(listing.user_id)
-                    _seller.value = sellerData
+                withContext(Dispatchers.Main) {
+                    _isLoading.value = true
+                    _error.value = null
                 }
 
-                _isLoading.value = false
+                // Use getListingById instead of getListing
+                val listing = listingRepository.getListingById(listingId)
+
+                if (listing == null) {
+                    withContext(Dispatchers.Main) {
+                        _isLoading.value = false
+                        _error.value = "Listing not found"
+                    }
+                    return@launch
+                }
+
+                // Get seller information - make sure user_id exists
+                val seller = if (listing.user_id.isNotEmpty()) {
+                    userRepository.getUser(listing.user_id)
+                } else {
+                    null
+                }
+
+                withContext(Dispatchers.Main) {
+                    _listing.value = listing
+                    _seller.value = seller
+                    _isLoading.value = false
+                }
+
             } catch (e: Exception) {
-                _error.value = "Failed to load listing: ${e.message}"
-                _isLoading.value = false
+                withContext(Dispatchers.Main) {
+                    _isLoading.value = false
+                    _error.value = "Failed to load listing: ${e.message}"
+                }
             }
         }
     }
 
-    // NEW: Check if listing is in shortlist
-    fun checkIfInShortlist(userId: String, listingId: String) {
-        viewModelScope.launch {
-            try {
-                val doc = firestore.collection("shortlist")
-                    .document("${userId}_${listingId}")
-                    .get()
-                    .await()
-
-                _isInShortlist.value = doc.exists()
-            } catch (e: Exception) {
-                // Silently fail - just assume not in shortlist
-                _isInShortlist.value = false
-            }
+    // Helper function to get tier from listing
+    fun getTierFromListing(listing: Listing): ListingTier {
+        return when (listing.listingTier.uppercase()) {
+            "FREE" -> ListingTier.FREE
+            "BASIC" -> ListingTier.BASIC
+            "BULK" -> ListingTier.BULK
+            "PREMIUM" -> ListingTier.PREMIUM
+            else -> ListingTier.FREE
         }
     }
 
-    // NEW: Add to shortlist
-    suspend fun addToShortlist(userId: String, listingId: String): Boolean {
-        return try {
-            val shortlistItem = mapOf(
-                "userId" to userId,
-                "listingId" to listingId,
-                "createdAt" to System.currentTimeMillis()
-            )
-
-            firestore.collection("shortlist")
-                .document("${userId}_${listingId}")
-                .set(shortlistItem)
-                .await()
-
-            _isInShortlist.value = true
-            true
-        } catch (e: Exception) {
-            false
+    // Refresh listing data
+    fun refreshListing() {
+        val currentListingId = _listing.value?.id
+        if (!currentListingId.isNullOrEmpty()) {
+            loadListing(currentListingId)
         }
     }
 
-    // NEW: Remove from shortlist
-    suspend fun removeFromShortlist(userId: String, listingId: String): Boolean {
-        return try {
-            firestore.collection("shortlist")
-                .document("${userId}_${listingId}")
-                .delete()
-                .await()
-
-            _isInShortlist.value = false
-            true
-        } catch (e: Exception) {
-            false
-        }
+    // Clear error
+    fun clearError() {
+        _error.value = null
     }
 }

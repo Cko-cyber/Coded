@@ -429,6 +429,7 @@ fun TierSelectionDialog(
     )
 }
 
+// SINGLE DEFINITIONS - Remove duplicates below this line
 fun getTierCost(tier: ListingTier): Int {
     return when (tier) {
         ListingTier.FREE -> 0

@@ -99,7 +99,7 @@ fun LoginScreen(navController: NavController, authRepository: AuthRepository) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
+            .background(Color(0xFF013B33))
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -526,7 +526,7 @@ fun PhoneLoginForm(
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF013B33)
+                    containerColor = Color(0xFFFFB300)
                 ),
                 shape = RoundedCornerShape(12.dp),
                 enabled = !isLoading && isValidEswatiniPhoneNumber(phoneNumber)

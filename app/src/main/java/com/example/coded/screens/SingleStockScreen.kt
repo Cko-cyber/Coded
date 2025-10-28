@@ -1,12 +1,8 @@
 package com.example.coded.screens
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,7 +10,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -23,56 +18,31 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.coded.data.AuthRepository
+import com.example.coded.data.ListingTier
 import com.example.coded.viewmodels.SingleStockViewModel
-import kotlinx.coroutines.launch
+import com.google.firebase.Timestamp
+import java.text.SimpleDateFormat
+import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SingleStockScreen(
-    navController: NavController,
-    listingId: String,
-    authRepository: AuthRepository
-) {
+fun SingleStockScreen(navController: NavController, listingId: String, authRepository: AuthRepository) {
     val viewModel: SingleStockViewModel = viewModel()
     val currentUser by authRepository.currentUser.collectAsState()
-    val listing by viewModel.listing.collectAsState()
-    val seller by viewModel.seller.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val isInShortlist by viewModel.isInShortlist.collectAsState()
 
-    val coroutineScope = rememberCoroutineScope()
+    // Collect state properly - use .value for State objects
+    val listingState = viewModel.listing
+    val sellerState = viewModel.seller
+    val isLoadingState = viewModel.isLoading
+    val errorState = viewModel.error
 
-    // State for booking options dialog
-    var showBookingDialog by remember { mutableStateOf(false) }
+    val listing by remember { listingState }
+    val seller by remember { sellerState }
+    val isLoading by remember { isLoadingState }
+    val error by remember { errorState }
 
-    // Load listing when screen opens - seller is loaded automatically by the ViewModel
     LaunchedEffect(listingId) {
         viewModel.loadListing(listingId)
-        currentUser?.let { user ->
-            viewModel.checkIfInShortlist(user.id, listingId)
-        }
-    }
-
-    // Booking Options Dialog
-    if (showBookingDialog) {
-        BookingOptionsDialog(
-            onDismiss = { showBookingDialog = false },
-            onBookCall = {
-                showBookingDialog = false
-                // Check if seller info is available before navigating
-                if (listing != null) {
-                    navController.navigate("book_call/${listingId}/${listing!!.user_id}")
-                }
-            },
-            onScheduleViewing = {
-                showBookingDialog = false
-                // Check if seller info is available before navigating
-                if (listing != null) {
-                    navController.navigate("schedule_viewing/${listingId}/${listing!!.user_id}")
-                }
-            }
-        )
     }
 
     Scaffold(
@@ -99,36 +69,19 @@ fun SingleStockScreen(
                         IconButton(onClick = {
                             navController.navigate("edit_listing/$listingId")
                         }) {
-                            Icon(
-                                Icons.Default.Edit,
-                                "Edit Listing",
-                                tint = Color.White
-                            )
+                            Icon(Icons.Default.Edit, "Edit Listing", tint = Color.White)
                         }
                     }
-
-                    // Shortlist toggle button
                     IconButton(onClick = {
-                        currentUser?.let { user ->
-                            coroutineScope.launch {
-                                if (isInShortlist) {
-                                    viewModel.removeFromShortlist(user.id, listingId)
-                                } else {
-                                    viewModel.addToShortlist(user.id, listingId)
-                                }
-                            }
-                        }
+                        // TODO: Implement addToShortlist functionality
                     }) {
-                        Icon(
-                            if (isInShortlist) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            "Toggle Shortlist",
-                            tint = if (isInShortlist) Color(0xFFFF6F00) else Color.White
-                        )
+                        Icon(Icons.Default.Favorite, "Add to Shortlist", tint = Color.White)
                     }
                 }
             )
         },
         bottomBar = {
+            // Show action buttons for ALL listings when not owner
             if (currentUser?.id != listing?.user_id && listing != null) {
                 Surface(
                     tonalElevation = 8.dp,
@@ -139,43 +92,73 @@ fun SingleStockScreen(
                             .fillMaxWidth()
                             .padding(16.dp)
                     ) {
-                        // Primary Action Buttons - SAME SIZE
-                        Row(
+                        // Contact Seller Button - For ALL tiers
+                        Button(
+                            onClick = {
+                                // Navigate to messages with listing and seller info
+                                navController.navigate(
+                                    "messages?listingId=$listingId&sellerId=${listing!!.user_id}"
+                                )
+                            },
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF013B33)
+                            )
                         ) {
-                            // Message Button
-                            Button(
-                                onClick = {
-                                    // Check if seller info is available before navigating
-                                    if (listing != null) {
-                                        navController.navigate("chat/${listingId}/${listing!!.user_id}")
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF013B33)
-                                )
-                            ) {
-                                Icon(Icons.Default.Chat, contentDescription = "Message")
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Message")
-                            }
+                            Icon(Icons.Default.Chat, "Contact")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Contact Seller")
+                        }
 
-                            // Book Now Button
-                            Button(
-                                onClick = {
-                                    showBookingDialog = true
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFFFF6F00)
-                                )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Additional buttons for Premium/Basic listings
+                        val tier = getTierFromListing(listing!!)
+                        if (tier in listOf(ListingTier.PREMIUM, ListingTier.BASIC)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Schedule, contentDescription = "Book Now")
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Book Now")
+                                OutlinedButton(
+                                    onClick = {
+                                        navController.navigate(
+                                            "messages?listingId=$listingId&sellerId=${listing!!.user_id}"
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Phone, "Call", modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Book Call")
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        navController.navigate(
+                                            "messages?listingId=$listingId&sellerId=${listing!!.user_id}"
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Visibility, "View", modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Book Viewing")
+                                }
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Save to Shortlist
+                        OutlinedButton(
+                            onClick = {
+                                // TODO: Implement shortlist
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Favorite, "Shortlist")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Save to Shortlist")
                         }
                     }
                 }
@@ -216,12 +199,7 @@ fun SingleStockScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = {
-                            viewModel.loadListing(listingId)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF013B33)
-                        )
+                        onClick = { viewModel.loadListing(listingId) }
                     ) {
                         Text("Try Again")
                     }
@@ -252,9 +230,38 @@ fun SingleStockScreen(
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
             ) {
-                // Image Carousel
-                if (listing!!.image_urls.isNotEmpty()) {
-                    ImageCarousel(listing!!.image_urls)
+                // Image Gallery
+                val imageUrls = listing!!.image_urls ?: emptyList()
+                if (imageUrls.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp)
+                    ) {
+                        AsyncImage(
+                            model = imageUrls.first(),
+                            contentDescription = "Listing image",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+
+                        if (imageUrls.size > 1) {
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.6f),
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "1/${imageUrls.size}",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
                 } else {
                     Box(
                         modifier = Modifier
@@ -288,34 +295,35 @@ fun SingleStockScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val tierEnum = listing!!.getTierEnum()
+                        val tier = getTierFromListing(listing!!)
                         Surface(
-                            color = when (tierEnum) {
-                                com.example.coded.data.ListingTier.FREE -> Color(0xFF4CAF50)
-                                com.example.coded.data.ListingTier.BASIC -> Color(0xFF2196F3)
-                                com.example.coded.data.ListingTier.BULK -> Color(0xFFFF6F00)
-                                com.example.coded.data.ListingTier.PREMIUM -> Color(0xFFFFD700)
+                            color = when (tier) {
+                                ListingTier.FREE -> Color(0xFF4CAF50)
+                                ListingTier.BASIC -> Color(0xFF2196F3)
+                                ListingTier.BULK -> Color(0xFFFF6F00)
+                                ListingTier.PREMIUM -> Color(0xFFFFD700)
                             },
-                            shape = RoundedCornerShape(8.dp)
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = tierEnum.displayName,
+                                text = tier.displayName,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = when (tierEnum) {
-                                    com.example.coded.data.ListingTier.PREMIUM -> Color.Black
+                                color = when (tier) {
+                                    ListingTier.PREMIUM -> Color.Black
                                     else -> Color.White
                                 },
                                 fontWeight = FontWeight.Bold
                             )
                         }
 
+                        val isActive = listing!!.is_active ?: false
                         Surface(
-                            color = if (listing!!.is_active) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
-                            shape = RoundedCornerShape(8.dp)
+                            color = if (isActive) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = if (listing!!.is_active) "ACTIVE" else "INACTIVE",
+                                text = if (isActive) "ACTIVE" else "INACTIVE",
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White,
@@ -333,14 +341,14 @@ fun SingleStockScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = listing!!.breed,
+                            text = listing!!.breed ?: "Unknown Breed",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF013B33),
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            text = "E ${listing!!.price}",
+                            text = "KSh ${listing!!.price ?: 0}",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF013B33)
@@ -356,12 +364,12 @@ fun SingleStockScreen(
                     ) {
                         DetailCard(
                             title = "Age",
-                            value = listing!!.age,
+                            value = listing!!.age ?: "Unknown",
                             modifier = Modifier.weight(1f)
                         )
                         DetailCard(
                             title = "Location",
-                            value = listing!!.location,
+                            value = listing!!.location ?: "Unknown",
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -369,113 +377,39 @@ fun SingleStockScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Seller Information
-                    if (seller != null) {
+                    seller?.let { currentSeller ->
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA))
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = seller!!.full_name,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF013B33)
-                                            )
-                                            // Verified badge
-                                            if (seller!!.mobile_number.isNotEmpty()) {
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Surface(
-                                                    color = Color(0xFF4CAF50),
-                                                    shape = RoundedCornerShape(4.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "Verified",
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = Color.White,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = seller!!.location,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = Color.Gray
-                                        )
-                                    }
-
-                                    // Seller status
-                                    Surface(
-                                        color = Color(0xFF013B33).copy(alpha = 0.1f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(8.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Text(
-                                                text = "Active",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFF013B33),
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Seller",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color.Gray
-                                            )
-                                        }
-                                    }
+                                Text(
+                                    text = "Seller Information",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF013B33)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(currentSeller.full_name ?: "Unknown Seller")
+                                if (!currentSeller.mobile_number.isNullOrEmpty()) {
+                                    Text("Phone: ${currentSeller.mobile_number}")
+                                }
+                                if (!currentSeller.location.isNullOrEmpty()) {
+                                    Text("Location: ${currentSeller.location}")
                                 }
                             }
                         }
-                    } else {
-                        // Seller loading state
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    CircularProgressIndicator(
-                                        color = Color(0xFF013B33),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Loading seller information...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.Gray
-                                    )
-                                }
-                            }
-                        }
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Health Information
-                    if (listing!!.vaccination_status.isNotEmpty() || listing!!.deworming.isNotEmpty()) {
+                    val vaccinationStatus = listing!!.vaccination_status ?: ""
+                    val dewormingStatus = listing!!.deworming ?: ""
+
+                    if (vaccinationStatus.isNotEmpty() || dewormingStatus.isNotEmpty()) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E8))
@@ -494,20 +428,20 @@ fun SingleStockScreen(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                if (listing!!.vaccination_status.isNotEmpty()) {
+                                if (vaccinationStatus.isNotEmpty()) {
                                     DetailRow(
                                         icon = Icons.Default.MedicalServices,
                                         title = "Vaccination Status",
-                                        value = listing!!.vaccination_status
+                                        value = vaccinationStatus
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                 }
 
-                                if (listing!!.deworming.isNotEmpty()) {
+                                if (dewormingStatus.isNotEmpty()) {
                                     DetailRow(
                                         icon = Icons.Default.HealthAndSafety,
                                         title = "Deworming Status",
-                                        value = listing!!.deworming
+                                        value = dewormingStatus
                                     )
                                 }
                             }
@@ -516,7 +450,8 @@ fun SingleStockScreen(
                     }
 
                     // Full Description
-                    if (listing!!.full_details.isNotEmpty()) {
+                    val fullDetails = listing!!.full_details ?: ""
+                    if (fullDetails.isNotEmpty()) {
                         Card(
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -535,7 +470,7 @@ fun SingleStockScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text(
-                                    text = listing!!.full_details,
+                                    text = fullDetails,
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
@@ -544,143 +479,38 @@ fun SingleStockScreen(
 
                     // Listing Metadata
                     Spacer(modifier = Modifier.height(16.dp))
+                    val createdAt = listing!!.created_at ?: Timestamp.now()
+                    val dateString = formatTimestamp(createdAt)
                     Text(
-                        text = "Listed on ${listing!!.created_at.toDate().toString().substring(0, 10)}",
+                        text = "Listed on $dateString",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
+
+                    // Extra space for bottom bar
+                    Spacer(modifier = Modifier.height(160.dp))
                 }
             }
         }
     }
 }
 
-// Image Carousel with HorizontalPager
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun ImageCarousel(imageUrls: List<String>) {
-    val pagerState = rememberPagerState(
-        initialPage = 0,
-        pageCount = { imageUrls.size }
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(300.dp)
-    ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            AsyncImage(
-                model = imageUrls[page],
-                contentDescription = "Listing image ${page + 1}",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        // Image counter
-        if (imageUrls.size > 1) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "${pagerState.currentPage + 1}/${imageUrls.size}",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // Page indicators
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                repeat(imageUrls.size) { index ->
-                    val color = if (pagerState.currentPage == index) Color.White else Color.White.copy(alpha = 0.5f)
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(color)
-                    )
-                }
-            }
-        }
+// Helper function to get tier from listing
+private fun getTierFromListing(listing: com.example.coded.data.Listing): ListingTier {
+    return when (listing.listingTier.uppercase()) {
+        "FREE" -> ListingTier.FREE
+        "BASIC" -> ListingTier.BASIC
+        "BULK" -> ListingTier.BULK
+        "PREMIUM" -> ListingTier.PREMIUM
+        else -> ListingTier.FREE
     }
 }
 
-// Booking Options Dialog - REMOVED "Send Message" option
-@Composable
-fun BookingOptionsDialog(
-    onDismiss: () -> Unit,
-    onBookCall: () -> Unit,
-    onScheduleViewing: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Book Appointment",
-                style = MaterialTheme.typography.titleLarge,
-                color = Color(0xFF013B33)
-            )
-        },
-        text = {
-            Column {
-                Text(
-                    text = "Choose how you'd like to connect with the seller:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Book a Call Option
-                OutlinedButton(
-                    onClick = onBookCall,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF013B33)
-                    )
-                ) {
-                    Icon(Icons.Default.Call, contentDescription = "Book Call")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Book a Phone Call")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Schedule Viewing Option
-                OutlinedButton(
-                    onClick = onScheduleViewing,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFF013B33)
-                    )
-                ) {
-                    Icon(Icons.Default.CalendarToday, contentDescription = "Schedule Viewing")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Schedule Viewing")
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
+// Helper function to format timestamp
+private fun formatTimestamp(timestamp: com.google.firebase.Timestamp): String {
+    val date = timestamp.toDate()
+    val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+    return formatter.format(date)
 }
 
 @Composable

@@ -4,7 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,12 +17,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coded.data.AuthRepository
+import com.example.coded.data.Chat
 import com.example.coded.data.Message
+import com.example.coded.data.MessageRepository
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -30,114 +30,87 @@ import java.util.*
 @Composable
 fun MessagesScreen(
     navController: NavController,
-    authRepository: AuthRepository
+    authRepository: AuthRepository,
+    listingId: String? = null,
+    sellerId: String? = null
 ) {
-    // Simple messages screen that shows chat conversations
-    // You can modify this to show a list of chat conversations
+    val currentUser by authRepository.currentUser.collectAsState()
+    val messageRepository = remember { MessageRepository() }
+    val coroutineScope = rememberCoroutineScope()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Messages") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF013B33),
-                    titleContentColor = Color.White,
-                    actionIconContentColor = Color.White
-                )
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(Color(0xFFF5F5F5)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    Icons.Default.Message,
-                    contentDescription = "Messages",
-                    modifier = Modifier.size(64.dp),
-                    tint = Color.Gray
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Your Messages",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.Gray
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Chat with sellers and buyers",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
+    var chats by remember { mutableStateOf<List<Chat>>(emptyList()) }
+    var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var messageText by remember { mutableStateOf("") }
+    var isInChatMode by remember { mutableStateOf(false) }
+    var currentChatId by remember { mutableStateOf<String?>(null) }
+
+    // Load chats when screen opens
+    LaunchedEffect(currentUser) {
+        if (currentUser != null) {
+            messageRepository.getUserChats(currentUser!!.id).collectLatest { chatList ->
+                chats = chatList
+                isLoading = false
             }
         }
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ChatScreen(
-    navController: NavController,
-    authRepository: AuthRepository,
-    listingId: String,
-    sellerId: String
-) {
-    val currentUser by authRepository.currentUser.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
-    val firestore = FirebaseFirestore.getInstance()
+    // Handle direct chat opening from listing
+    LaunchedEffect(listingId, sellerId, currentUser) {
+        if (listingId != null && sellerId != null && currentUser != null) {
+            isInChatMode = true
+            currentChatId = generateChatId(currentUser!!.id, sellerId, listingId)
 
-    var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
-    var messageText by remember { mutableStateOf("") }
-    var isSending by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(true) }
+            // Load messages for this chat
+            messageRepository.getMessages(currentChatId!!).collectLatest { messageList ->
+                messages = messageList
+                isLoading = false
+            }
 
-    val listState = rememberLazyListState()
-    val chatId = remember {
-        generateChatId(currentUser?.id ?: "", sellerId, listingId)
+            // Mark messages as read when opening chat
+            coroutineScope.launch {
+                messageRepository.markMessagesAsRead(currentChatId!!, currentUser!!.id)
+            }
+        }
     }
 
-    // Load messages
-    LaunchedEffect(chatId) {
-        try {
-            firestore.collection("messages")
-                .whereEqualTo("chatId", chatId)
-                .orderBy("created_at", Query.Direction.ASCENDING)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        isLoading = false
-                        return@addSnapshotListener
-                    }
+    // Handle chat selection
+    LaunchedEffect(currentChatId) {
+        if (currentChatId != null && currentUser != null) {
+            messageRepository.getMessages(currentChatId!!).collectLatest { messageList ->
+                messages = messageList
+            }
 
-                    messages = snapshot?.documents?.mapNotNull { doc ->
-                        doc.toObject(Message::class.java)?.copy(id = doc.id)
-                    } ?: emptyList()
-
-                    isLoading = false
-
-                    // Scroll to bottom when new message arrives
-                    coroutineScope.launch {
-                        if (messages.isNotEmpty()) {
-                            listState.animateScrollToItem(messages.size - 1)
-                        }
-                    }
-                }
-        } catch (e: Exception) {
-            isLoading = false
+            // Mark messages as read when opening chat
+            coroutineScope.launch {
+                messageRepository.markMessagesAsRead(currentChatId!!, currentUser!!.id)
+            }
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Chat with Seller") },
+                title = {
+                    Text(if (isInChatMode) "Chat" else "Messages")
+                },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = {
+                        if (isInChatMode) {
+                            isInChatMode = false
+                            currentChatId = null
+                            // Reload chats when going back
+                            if (currentUser != null) {
+                                coroutineScope.launch {
+                                    messageRepository.getUserChats(currentUser!!.id).collectLatest { chatList ->
+                                        chats = chatList
+                                    }
+                                }
+                            }
+                        } else {
+                            navController.popBackStack()
+                        }
+                    }) {
                         Icon(Icons.Default.ArrowBack, "Back")
                     }
                 },
@@ -147,102 +120,6 @@ fun ChatScreen(
                     navigationIconContentColor = Color.White
                 )
             )
-        },
-        bottomBar = {
-            // Message Input
-            Surface(
-                tonalElevation = 8.dp,
-                shadowElevation = 8.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    OutlinedTextField(
-                        value = messageText,
-                        onValueChange = { messageText = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Type a message...") },
-                        maxLines = 4,
-                        shape = RoundedCornerShape(24.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF013B33),
-                            unfocusedBorderColor = Color.Gray.copy(alpha = 0.3f)
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Send Button
-                    FloatingActionButton(
-                        onClick = {
-                            if (messageText.isNotBlank() && !isSending && currentUser != null) {
-                                coroutineScope.launch {
-                                    isSending = true
-
-                                    val message = Message(
-                                        id = UUID.randomUUID().toString(),
-                                        listingId = listingId,
-                                        senderId = currentUser!!.id,
-                                        receiverId = sellerId,
-                                        content = messageText.trim(),
-                                        isRead = false,
-                                        createdAt = Timestamp.now()
-                                    )
-
-                                    try {
-                                        // Save message
-                                        firestore.collection("messages")
-                                            .document(message.id)
-                                            .set(message.toMap())
-                                            .await()
-
-                                        // Update or create chat
-                                        val chat = mapOf(
-                                            "id" to chatId,
-                                            "participant1" to currentUser!!.id,
-                                            "participant2" to sellerId,
-                                            "listingId" to listingId,
-                                            "lastMessage" to message.content,
-                                            "lastMessageTime" to Timestamp.now(),
-                                            "participants" to listOf(currentUser!!.id, sellerId)
-                                        )
-
-                                        firestore.collection("chats")
-                                            .document(chatId)
-                                            .set(chat)
-                                            .await()
-
-                                        messageText = ""
-                                    } catch (e: Exception) {
-                                        // Handle error
-                                    }
-
-                                    isSending = false
-                                }
-                            }
-                        },
-                        containerColor = Color(0xFF013B33),
-                        modifier = Modifier.size(56.dp),
-                        elevation = FloatingActionButtonDefaults.elevation(0.dp)
-                    ) {
-                        if (isSending) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        } else {
-                            Icon(
-                                Icons.Default.Send,
-                                "Send",
-                                tint = Color.White
-                            )
-                        }
-                    }
-                }
-            }
         }
     ) { padding ->
         Box(
@@ -251,47 +128,177 @@ fun ChatScreen(
                 .padding(padding)
                 .background(Color(0xFFF5F5F5))
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = Color(0xFF013B33)
-                )
-            } else if (messages.isEmpty()) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.Default.ChatBubbleOutline,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "No messages yet",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Start the conversation!",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
+            when {
+                isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFF013B33))
+                    }
                 }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(messages) { message ->
-                        MessageBubble(
-                            message = message,
-                            isCurrentUser = message.senderId == currentUser?.id
-                        )
+
+                isInChatMode -> {
+                    // Chat View
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Messages List
+                        if (messages.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        Icons.Default.Chat,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = Color.Gray
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "No messages yet",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = Color.Gray
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Start a conversation",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                reverseLayout = true
+                            ) {
+                                items(messages.reversed()) { message ->
+                                    MessageBubble(
+                                        message = message,
+                                        isCurrentUser = message.senderId == currentUser?.id
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+                        }
+
+                        // Message Input
+                        Surface(
+                            tonalElevation = 8.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = messageText,
+                                    onValueChange = { messageText = it },
+                                    placeholder = { Text("Type a message...") },
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 3,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color(0xFF013B33),
+                                        unfocusedBorderColor = Color.Gray
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(
+                                    onClick = {
+                                        if (messageText.isNotBlank() && currentUser != null && currentChatId != null) {
+                                            coroutineScope.launch {
+                                                // Extract participant IDs from chat ID
+                                                val parts = currentChatId!!.split("_")
+                                                val otherParticipant = if (parts[0] == currentUser!!.id) parts[1] else parts[0]
+                                                val listingIdFromChat = parts[2]
+
+                                                val message = Message(
+                                                    id = UUID.randomUUID().toString(),
+                                                    listingId = listingIdFromChat,
+                                                    senderId = currentUser!!.id,
+                                                    receiverId = otherParticipant,
+                                                    content = messageText,
+                                                    isRead = false,
+                                                    createdAt = Timestamp.now()
+                                                )
+
+                                                val success = messageRepository.sendMessage(message)
+                                                if (success) {
+                                                    messageText = ""
+                                                    println("✅ Message sent successfully!")
+                                                } else {
+                                                    println("❌ Failed to send message")
+                                                }
+                                            }
+                                        }
+                                    },
+                                    enabled = messageText.isNotBlank() && currentChatId != null,
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = Color(0xFF013B33),
+                                        disabledContainerColor = Color.Gray
+                                    )
+                                ) {
+                                    Icon(
+                                        Icons.Default.Send,
+                                        contentDescription = "Send",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                chats.isEmpty() -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Chat,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = Color.Gray
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "No messages yet",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.Gray
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Chat with sellers and buyers here",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(chats) { chat ->
+                            ChatItem(
+                                chat = chat,
+                                currentUserId = currentUser?.id ?: "",
+                                onClick = {
+                                    isInChatMode = true
+                                    currentChatId = chat.id
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -301,54 +308,111 @@ fun ChatScreen(
 
 @Composable
 fun MessageBubble(message: Message, isCurrentUser: Boolean) {
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
     ) {
-        Card(
-            modifier = Modifier.widthIn(max = 280.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isCurrentUser) Color(0xFF013B33) else Color.White
-            ),
+        Surface(
+            color = if (isCurrentUser) Color(0xFF013B33) else Color.White,
             shape = RoundedCornerShape(
                 topStart = 16.dp,
                 topEnd = 16.dp,
                 bottomStart = if (isCurrentUser) 16.dp else 4.dp,
                 bottomEnd = if (isCurrentUser) 4.dp else 16.dp
             ),
-            elevation = CardDefaults.cardElevation(2.dp)
+            shadowElevation = if (isCurrentUser) 2.dp else 1.dp,
+            modifier = Modifier.widthIn(max = 280.dp)
         ) {
             Column(
                 modifier = Modifier.padding(12.dp)
             ) {
                 Text(
                     text = message.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isCurrentUser) Color.White else Color.Black
+                    color = if (isCurrentUser) Color.White else Color.Black,
+                    style = MaterialTheme.typography.bodyMedium
                 )
-
                 Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = SimpleDateFormat("HH:mm", Locale.getDefault())
+                        .format(message.createdAt.toDate()),
+                    color = if (isCurrentUser) Color.White.copy(alpha = 0.7f) else Color.Gray,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatItem(chat: Chat, currentUserId: String, onClick: () -> Unit) {
+    val otherParticipant = if (chat.participant1 == currentUserId) chat.participant2 else chat.participant1
+    val dateFormat = SimpleDateFormat("MMM dd", Locale.getDefault())
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF013B33),
+                modifier = Modifier.size(50.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = timeFormat.format(message.createdAt.toDate()),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isCurrentUser) Color.White.copy(alpha = 0.7f) else Color.Gray
+                        text = "U",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
                     )
+                }
+            }
 
-                    if (isCurrentUser) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
-                            contentDescription = if (message.isRead) "Read" else "Sent",
-                            modifier = Modifier.size(16.dp),
-                            tint = if (message.isRead) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.7f)
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "User ${otherParticipant.takeLast(6)}", // Show last 6 chars for better identification
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF013B33)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = chat.lastMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray,
+                    maxLines = 1
+                )
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = dateFormat.format(chat.lastMessageTime.toDate()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+                if (chat.unreadCount > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        color = Color(0xFF013B33),
+                        shape = CircleShape
+                    ) {
+                        Text(
+                            text = chat.unreadCount.toString(),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -357,21 +421,8 @@ fun MessageBubble(message: Message, isCurrentUser: Boolean) {
     }
 }
 
-fun generateChatId(user1: String, user2: String, listingId: String): String {
+// Helper function to generate chat ID (same as in repository)
+private fun generateChatId(user1: String, user2: String, listingId: String): String {
     val participants = listOf(user1, user2).sorted()
     return "${participants[0]}_${participants[1]}_$listingId"
-}
-
-// Extension function to convert Message to Map
-fun Message.toMap(): Map<String, Any> {
-    return mapOf(
-        "id" to id,
-        "chatId" to generateChatId(senderId, receiverId, listingId),
-        "listingId" to listingId,
-        "senderId" to senderId,
-        "receiverId" to receiverId,
-        "content" to content,
-        "isRead" to isRead,
-        "created_at" to createdAt
-    )
 }

@@ -15,62 +15,94 @@ class MessageRepository {
 
     suspend fun sendMessage(message: Message): Boolean {
         return try {
-            // Save message
-            messagesCollection.document(message.id).set(message).await()
+            // ✅ Generate chat ID and include it in the message
+            val chatId = generateChatId(message.senderId, message.receiverId, message.listingId)
+            val messageWithChatId = message.copy(chatId = chatId)
+
+            println("📤 Sending message:")
+            println("   Chat ID: $chatId")
+            println("   From: ${message.senderId} → To: ${message.receiverId}")
+            println("   Listing: ${message.listingId}")
+            println("   Content: ${message.content}")
+
+            // Save message with chat_id
+            messagesCollection.document(message.id).set(messageWithChatId).await()
 
             // Update or create chat
-            updateChat(message)
+            updateChat(messageWithChatId, chatId)
 
-            println("✅ Message sent: ${message.id}")
+            println("✅ Message sent successfully!")
             true
         } catch (e: Exception) {
             println("❌ Error sending message: ${e.message}")
+            e.printStackTrace()
             false
         }
     }
 
-    private suspend fun updateChat(message: Message) {
-        val chatId = generateChatId(message.senderId, message.receiverId, message.listingId)
+    private suspend fun updateChat(message: Message, chatId: String) {
+        try {
+            val chat = Chat(
+                id = chatId,
+                participant1 = message.senderId,
+                participant2 = message.receiverId,
+                listingId = message.listingId,
+                lastMessage = message.content,
+                lastMessageTime = message.createdAt,
+                unreadCount = if (message.senderId != message.receiverId) 1 else 0,
+                participants = listOf(message.senderId, message.receiverId) // ✅ Required for querying
+            )
 
-        val chat = Chat(
-            id = chatId,
-            participant1 = message.senderId,
-            participant2 = message.receiverId,
-            listingId = message.listingId,
-            lastMessage = message.content,
-            lastMessageTime = message.createdAt,
-            unreadCount = if (message.senderId != message.receiverId) 1 else 0
-        )
-
-        chatsCollection.document(chatId).set(chat).await()
+            println("💾 Updating chat: $chatId")
+            chatsCollection.document(chatId).set(chat).await()
+            println("✅ Chat updated successfully")
+        } catch (e: Exception) {
+            println("❌ Error updating chat: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     fun getMessages(chatId: String): Flow<List<Message>> = flow {
         try {
+            println("📥 Fetching messages for chat: $chatId")
+
             val query = messagesCollection
-                .whereEqualTo("chat_id", chatId)
+                .whereEqualTo("chat_id", chatId) // ✅ Now this field exists
                 .orderBy("created_at", Query.Direction.ASCENDING)
 
             val snapshot = query.get().await()
-            val messages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+            val messages = snapshot.documents.mapNotNull {
+                it.toObject(Message::class.java)
+            }
+
+            println("✅ Retrieved ${messages.size} messages")
             emit(messages)
         } catch (e: Exception) {
             println("❌ Error getting messages: ${e.message}")
+            e.printStackTrace()
             emit(emptyList())
         }
     }
 
     fun getUserChats(userId: String): Flow<List<Chat>> = flow {
         try {
+            println("📥 Fetching chats for user: $userId")
+
+            // ✅ Query using participants array
             val query = chatsCollection
                 .whereArrayContains("participants", userId)
                 .orderBy("last_message_time", Query.Direction.DESCENDING)
 
             val snapshot = query.get().await()
-            val chats = snapshot.documents.mapNotNull { it.toObject(Chat::class.java) }
+            val chats = snapshot.documents.mapNotNull {
+                it.toObject(Chat::class.java)
+            }
+
+            println("✅ Retrieved ${chats.size} chats")
             emit(chats)
         } catch (e: Exception) {
             println("❌ Error getting user chats: ${e.message}")
+            e.printStackTrace()
             emit(emptyList())
         }
     }
@@ -78,5 +110,28 @@ class MessageRepository {
     private fun generateChatId(user1: String, user2: String, listingId: String): String {
         val participants = listOf(user1, user2).sorted()
         return "${participants[0]}_${participants[1]}_$listingId"
+    }
+
+    // Mark messages as read when user opens a chat
+    suspend fun markMessagesAsRead(chatId: String, userId: String) {
+        try {
+            val messages = messagesCollection
+                .whereEqualTo("chat_id", chatId)
+                .whereEqualTo("receiver_id", userId)
+                .whereEqualTo("is_read", false)
+                .get()
+                .await()
+
+            val batch = db.batch()
+            messages.documents.forEach { doc ->
+                batch.update(doc.reference, "is_read", true)
+            }
+            batch.commit().await()
+
+            // Reset unread count for this chat
+            chatsCollection.document(chatId).update("unread_count", 0).await()
+        } catch (e: Exception) {
+            println("❌ Error marking messages as read: ${e.message}")
+        }
     }
 }
