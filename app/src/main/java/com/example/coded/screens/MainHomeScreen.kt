@@ -356,62 +356,6 @@ fun HorizontalPagerCarousel(premiumListings: List<Listing>, navController: NavCo
     }
 }
 
-// Option 2: Alternative using LazyRow (Non-experimental)
-@Composable
-fun LazyRowCarousel(premiumListings: List<Listing>, navController: NavController) {
-    val listState = rememberLazyListState()
-    var currentIndex by remember { mutableStateOf(0) }
-
-    // Auto-scroll functionality for LazyRow
-    LaunchedEffect(currentIndex) {
-        if (premiumListings.size > 1) {
-            delay(5000)
-            val nextIndex = (currentIndex + 1) % premiumListings.size
-            listState.animateScrollToItem(nextIndex)
-            currentIndex = nextIndex
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-    ) {
-        LazyRow(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp)
-        ) {
-            items(premiumListings) { listing ->
-                PremiumListingCard(listing, navController, modifier = Modifier.width(300.dp))
-            }
-        }
-
-        // Page indicators
-        if (premiumListings.size > 1) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                repeat(premiumListings.size) { index ->
-                    val color = if (currentIndex == index) Color(0xFF013B33) else Color.Gray.copy(alpha = 0.5f)
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .size(8.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(color)
-                    )
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PremiumListingCard(
@@ -423,6 +367,14 @@ fun PremiumListingCard(
         modifier = modifier
             .padding(horizontal = 8.dp),
         onClick = {
+            // DEBUG: Print the listing details to see what's happening
+            println("Premium Listing Clicked:")
+            println("  - ID: ${listing.id}")
+            println("  - Breed: ${listing.breed}")
+            println("  - User ID: ${listing.user_id}")
+            println("  - Image URLs: ${listing.image_urls}")
+
+            // Navigate to SingleStockScreen with the listing ID
             navController.navigate("${Screen.SingleStock.route}/${listing.id}")
         },
         colors = CardDefaults.cardColors(containerColor = Color.White),
