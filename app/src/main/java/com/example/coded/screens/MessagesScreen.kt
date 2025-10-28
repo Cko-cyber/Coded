@@ -28,6 +28,60 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+fun MessagesScreen(
+    navController: NavController,
+    authRepository: AuthRepository
+) {
+    // Simple messages screen that shows chat conversations
+    // You can modify this to show a list of chat conversations
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Messages") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF013B33),
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                )
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(Color(0xFFF5F5F5)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    Icons.Default.Message,
+                    contentDescription = "Messages",
+                    modifier = Modifier.size(64.dp),
+                    tint = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Your Messages",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Chat with sellers and buyers",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun ChatScreen(
     navController: NavController,
     authRepository: AuthRepository,

@@ -1,22 +1,19 @@
 package com.example.coded.data
 
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
 import okio.BufferedSink
-import okio.source
 
-/**
- * Custom RequestBody that reports progress while uploading.
- */
 class ProgressRequestBody(
     private val data: ByteArray,
     private val contentType: String,
     private val onProgress: (progress: Float) -> Unit
 ) : RequestBody() {
 
-    override fun contentType() = contentType.toMediaTypeOrNull()
+    override fun contentType(): MediaType? = contentType.toMediaTypeOrNull()
 
-    override fun contentLength() = data.size.toLong()
+    override fun contentLength(): Long = data.size.toLong()
 
     override fun writeTo(sink: BufferedSink) {
         val total = data.size.toLong()

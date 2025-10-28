@@ -61,6 +61,11 @@ class AuthRepository {
         }
     }
 
+    // ADDED: Missing isUserLoggedIn method
+    fun isUserLoggedIn(): Boolean {
+        return auth.currentUser != null
+    }
+
     // Add this method to get current Firebase user
     fun getCurrentFirebaseUser(): FirebaseUser? {
         return auth.currentUser
@@ -348,5 +353,16 @@ class AuthRepository {
         if (currentUser != null) {
             loadUserData(currentUser.uid)
         }
+    }
+
+    // ADDED: Get current user ID for convenience
+    fun getCurrentUserId(): String? {
+        return auth.currentUser?.uid
+    }
+
+    // ADDED: Check if user is authenticated and has completed profile
+    fun hasCompleteProfile(): Boolean {
+        val user = _currentUser.value
+        return user?.full_name?.isNotBlank() == true && user?.email?.isNotBlank() == true
     }
 }

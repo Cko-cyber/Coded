@@ -14,16 +14,11 @@ fun NavGraph(
     navController: NavHostController,
     authRepository: AuthRepository
 ) {
-    // ALWAYS start with splash screen
     NavHost(
         navController = navController,
-        startDestination = Screen.Splash.route
+        startDestination = if (authRepository.isUserLoggedIn()) Screen.MainHome.route else Screen.Login.route
     ) {
-        // Splash Screen
-        composable(Screen.Splash.route) {
-            SplashScreen(navController, authRepository)
-        }
-
+        // REMOVED: Splash screen - no longer needed
         // Auth Flow
         composable(Screen.Login.route) {
             LoginScreen(navController, authRepository)
@@ -51,7 +46,7 @@ fun NavGraph(
         }
 
         composable(Screen.Messages.route) {
-            MessagesScreen(navController, authRepository)
+            MessagesScreen(navController, authRepository) // NOW WORKS - already imported
         }
 
         composable(
@@ -60,25 +55,6 @@ fun NavGraph(
         ) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
             SingleStockScreen(navController, listingId, authRepository)
-        }
-
-        // Chat Screen
-        composable(
-            route = "chat?listingId={listingId}&sellerId={sellerId}",
-            arguments = listOf(
-                navArgument("listingId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                },
-                navArgument("sellerId") {
-                    type = NavType.StringType
-                    defaultValue = ""
-                }
-            )
-        ) { backStackEntry ->
-            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
-            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
-            ChatScreen(navController, authRepository, listingId, sellerId)
         }
 
         // Profile Sub-screens
