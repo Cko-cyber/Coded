@@ -50,6 +50,7 @@ fun MessagesScreen(
         if (currentUser != null) {
             messageRepository.getUserChats(currentUser!!.id).collectLatest { chatList ->
                 chats = chatList
+                println("✅ Loaded ${chats.size} chats for user")
                 isLoading = false
             }
         }
@@ -61,9 +62,12 @@ fun MessagesScreen(
             isInChatMode = true
             currentChatId = generateChatId(currentUser!!.id, sellerId, listingId)
 
+            println("🔄 Opening direct chat: $currentChatId")
+
             // Load messages for this chat
             messageRepository.getMessages(currentChatId!!).collectLatest { messageList ->
                 messages = messageList
+                println("✅ Loaded ${messages.size} messages for direct chat")
                 isLoading = false
             }
 
@@ -74,11 +78,14 @@ fun MessagesScreen(
         }
     }
 
-    // Handle chat selection
+    // Handle chat selection with real-time updates
     LaunchedEffect(currentChatId) {
         if (currentChatId != null && currentUser != null) {
+            println("🔄 Setting up real-time messages for chat: $currentChatId")
+
             messageRepository.getMessages(currentChatId!!).collectLatest { messageList ->
                 messages = messageList
+                println("✅ Real-time update: ${messages.size} messages in chat")
             }
 
             // Mark messages as read when opening chat
@@ -168,6 +175,12 @@ fun MessagesScreen(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = Color.Gray
                                     )
+                                    // Debug info
+                                    Text(
+                                        text = "Chat ID: ${currentChatId?.take(20)}...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray
+                                    )
                                 }
                             }
                         } else {
@@ -179,7 +192,7 @@ fun MessagesScreen(
                                 reverseLayout = true
                             ) {
                                 items(messages.reversed()) { message ->
-                                    MessageBubble(
+                                    ChatMessageBubble(
                                         message = message,
                                         isCurrentUser = message.senderId == currentUser?.id
                                     )
@@ -215,27 +228,38 @@ fun MessagesScreen(
                                     onClick = {
                                         if (messageText.isNotBlank() && currentUser != null && currentChatId != null) {
                                             coroutineScope.launch {
-                                                // Extract participant IDs from chat ID
-                                                val parts = currentChatId!!.split("_")
-                                                val otherParticipant = if (parts[0] == currentUser!!.id) parts[1] else parts[0]
-                                                val listingIdFromChat = parts[2]
+                                                try {
+                                                    // Extract participant IDs from chat ID
+                                                    val parts = currentChatId!!.split("_")
+                                                    val otherParticipant = if (parts[0] == currentUser!!.id) parts[1] else parts[0]
+                                                    val listingIdFromChat = parts[2]
 
-                                                val message = Message(
-                                                    id = UUID.randomUUID().toString(),
-                                                    listingId = listingIdFromChat,
-                                                    senderId = currentUser!!.id,
-                                                    receiverId = otherParticipant,
-                                                    content = messageText,
-                                                    isRead = false,
-                                                    createdAt = Timestamp.now()
-                                                )
+                                                    val message = Message(
+                                                        id = UUID.randomUUID().toString(),
+                                                        listingId = listingIdFromChat,
+                                                        senderId = currentUser!!.id,
+                                                        receiverId = otherParticipant,
+                                                        content = messageText,
+                                                        isRead = false,
+                                                        createdAt = Timestamp.now(),
+                                                        chatId = currentChatId!! // ✅ Add chatId here
+                                                    )
 
-                                                val success = messageRepository.sendMessage(message)
-                                                if (success) {
-                                                    messageText = ""
-                                                    println("✅ Message sent successfully!")
-                                                } else {
-                                                    println("❌ Failed to send message")
+                                                    println("📤 MessagesScreen: Sending message:")
+                                                    println("   Chat ID: ${message.chatId}")
+                                                    println("   From: ${message.senderId} → To: ${message.receiverId}")
+                                                    println("   Content: ${message.content}")
+
+                                                    val success = messageRepository.sendMessage(message)
+                                                    if (success) {
+                                                        messageText = ""
+                                                        println("✅ MessagesScreen: Message sent successfully!")
+                                                    } else {
+                                                        println("❌ MessagesScreen: Failed to send message")
+                                                    }
+                                                } catch (e: Exception) {
+                                                    println("❌ MessagesScreen: Error sending message: ${e.message}")
+                                                    e.printStackTrace()
                                                 }
                                             }
                                         }
@@ -296,6 +320,7 @@ fun MessagesScreen(
                                 onClick = {
                                     isInChatMode = true
                                     currentChatId = chat.id
+                                    println("🔄 Opening chat: ${chat.id}")
                                 }
                             )
                         }
@@ -306,8 +331,9 @@ fun MessagesScreen(
     }
 }
 
+// CHANGED: Renamed to avoid conflict with ChatScreen's MessageBubble
 @Composable
-fun MessageBubble(message: Message, isCurrentUser: Boolean) {
+fun ChatMessageBubble(message: Message, isCurrentUser: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start

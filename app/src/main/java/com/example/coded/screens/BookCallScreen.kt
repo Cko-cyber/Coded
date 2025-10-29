@@ -1,7 +1,9 @@
 package com.example.coded.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,8 +16,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coded.data.AuthRepository
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.*
+
+data class CallBooking(
+    val id: String = "",
+    val listingId: String = "",
+    val buyerId: String = "",
+    val sellerId: String = "",
+    val preferredDate: String = "",
+    val preferredTime: String = "",
+    val message: String = "",
+    val status: String = "pending", // pending, confirmed, completed, cancelled
+    val createdAt: Timestamp = Timestamp.now()
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,17 +43,47 @@ fun BookCallScreen(
     sellerId: String,
     authRepository: AuthRepository
 ) {
-    var selectedDate by remember { mutableStateOf<Long?>(null) }
-    var selectedTime by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
-
     val currentUser by authRepository.currentUser.collectAsState()
+    val firestore = FirebaseFirestore.getInstance()
+    val coroutineScope = rememberCoroutineScope()
+
+    var selectedDate by remember { mutableStateOf("") }
+    var selectedTime by remember { mutableStateOf("Morning (9AM - 12PM)") }
+    var message by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var showSuccessDialog by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val timeSlots = listOf(
+        "Morning (9AM - 12PM)",
+        "Afternoon (12PM - 3PM)",
+        "Late Afternoon (3PM - 6PM)",
+        "Evening (6PM - 8PM)"
+    )
+
+    // Success Dialog
+    if (showSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Call Booked!") },
+            text = {
+                Text("Your call request has been sent to the seller. They will contact you at the scheduled time.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSuccessDialog = false
+                    navController.popBackStack()
+                }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Book a Phone Call") },
+                title = { Text("Book a Call") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, "Back")
@@ -47,221 +95,273 @@ fun BookCallScreen(
                     navigationIconContentColor = Color.White
                 )
             )
-        },
-        bottomBar = {
-            Surface(
-                tonalElevation = 8.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            // Submit booking request
-                            isSubmitting = true
-                            // TODO: Implement booking submission logic
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = selectedDate != null && selectedTime.isNotEmpty() && !isSubmitting,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF013B33)
-                        )
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Submitting...")
-                        } else {
-                            Icon(Icons.Default.Call, contentDescription = "Book Call")
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Request Phone Call")
-                        }
-                    }
-                }
-            }
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .background(Color(0xFFF5F5F5))
                 .verticalScroll(rememberScrollState())
+                .padding(16.dp)
         ) {
-            // Header
+            // Header Card
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E8))
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF013B33))
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Book a Phone Call",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF013B33)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Schedule a phone call with the seller to discuss this listing in detail.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
-                }
-            }
-
-            // Date Selection
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Select Date",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF013B33)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Simple date selection (you can enhance this with a date picker)
-                    val dates = listOf("Tomorrow", "In 2 days", "In 3 days")
-                    Column {
-                        dates.forEach { date ->
-                            OutlinedButton(
-                                onClick = {
-                                    selectedDate = System.currentTimeMillis() + when (date) {
-                                        "Tomorrow" -> 24 * 60 * 60 * 1000
-                                        "In 2 days" -> 2 * 24 * 60 * 60 * 1000
-                                        else -> 3 * 24 * 60 * 60 * 1000
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = if (selectedDate != null) Color(0xFF013B33) else Color.Gray
-                                )
-                            ) {
-                                Text(date)
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-                }
-            }
-
-            // Time Selection
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Select Time",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF013B33)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    val timeSlots = listOf(
-                        "9:00 AM", "10:00 AM", "11:00 AM",
-                        "2:00 PM", "3:00 PM", "4:00 PM"
-                    )
-
-                    // Time slot grid
-                    Column {
-                        timeSlots.chunked(3).forEach { row ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                row.forEach { time ->
-                                    OutlinedButton(
-                                        onClick = { selectedTime = time },
-                                        modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = if (selectedTime == time) Color.White else Color(0xFF013B33),
-                                            containerColor = if (selectedTime == time) Color(0xFF013B33) else Color.Transparent
-                                        )
-                                    ) {
-                                        Text(time)
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
-                }
-            }
-
-            // Additional Notes
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Additional Notes (Optional)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF013B33)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = notes,
-                        onValueChange = { notes = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp),
-                        placeholder = { Text("Any specific questions or topics you'd like to discuss...") },
-                        singleLine = false,
-                        maxLines = 4
-                    )
-                }
-            }
-
-            // Booking Summary
-            if (selectedDate != null && selectedTime.isNotEmpty()) {
-                Card(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA))
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
+                    Icon(
+                        Icons.Default.Call,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
                         Text(
-                            text = "Booking Summary",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF013B33)
+                            text = "Schedule a Phone Call",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Date: ${SimpleDateFormat("EEE, MMM d").format(Date(selectedDate!!))}")
-                        Text("Time: $selectedTime")
-                        if (notes.isNotEmpty()) {
-                            Text("Notes: $notes")
+                        Text(
+                            text = "Choose your preferred time",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Date Selection
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Preferred Date",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Select a date within the next 7 days",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Simple date picker (next 7 days)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(7) { index ->
+                            val calendar = Calendar.getInstance()
+                            calendar.add(Calendar.DAY_OF_YEAR, index)
+                            val dateFormat = SimpleDateFormat("EEEE, MMM dd", Locale.getDefault())
+                            val dateString = dateFormat.format(calendar.time)
+
+                            OutlinedButton(
+                                onClick = { selectedDate = dateString },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = if (selectedDate == dateString)
+                                        Color(0xFF013B33).copy(alpha = 0.1f) else Color.Transparent
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(dateString)
+                                    if (selectedDate == dateString) {
+                                        Icon(Icons.Default.CheckCircle, "Selected", tint = Color(0xFF013B33))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Time Selection
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Preferred Time",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    timeSlots.forEach { timeSlot ->
+                        OutlinedButton(
+                            onClick = { selectedTime = timeSlot },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (selectedTime == timeSlot)
+                                    Color(0xFF013B33).copy(alpha = 0.1f) else Color.Transparent
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(timeSlot)
+                                if (selectedTime == timeSlot) {
+                                    Icon(Icons.Default.CheckCircle, "Selected", tint = Color(0xFF013B33))
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Additional Message
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Additional Message (Optional)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = message,
+                        onValueChange = { message = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Any specific questions or details...") },
+                        minLines = 3,
+                        maxLines = 5
+                    )
+                }
+            }
+
+            // Error Message
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        text = it,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Submit Button
+            Button(
+                onClick = {
+                    if (selectedDate.isEmpty()) {
+                        errorMessage = "Please select a date"
+                        return@Button
+                    }
+
+                    if (currentUser == null) {
+                        errorMessage = "Please log in to book a call"
+                        return@Button
+                    }
+
+                    coroutineScope.launch {
+                        isLoading = true
+                        errorMessage = null
+
+                        try {
+                            val booking = CallBooking(
+                                id = UUID.randomUUID().toString(),
+                                listingId = listingId,
+                                buyerId = currentUser?.id ?: "", // Use safe call and provide default
+                                sellerId = sellerId,
+                                preferredDate = selectedDate,
+                                preferredTime = selectedTime,
+                                message = message,
+                                status = "pending",
+                                createdAt = Timestamp.now()
+                            )
+
+                            firestore.collection("call_bookings")
+                                .document(booking.id)
+                                .set(booking)
+                                .await()
+
+                            // Send notification to seller
+                            val notification = mapOf(
+                                "id" to UUID.randomUUID().toString(),
+                                "userId" to sellerId,
+                                "type" to "call_booking",
+                                "title" to "New Call Request",
+                                "message" to "Someone wants to schedule a call about your listing",
+                                "listingId" to listingId,
+                                "isRead" to false,
+                                "createdAt" to Timestamp.now()
+                            )
+
+                            firestore.collection("notifications")
+                                .document(notification["id"] as String)
+                                .set(notification)
+                                .await()
+
+                            isLoading = false
+                            showSuccessDialog = true
+
+                        } catch (e: Exception) {
+                            isLoading = false
+                            errorMessage = "Failed to book call: ${e.message}"
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                enabled = !isLoading && selectedDate.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF013B33)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White
+                    )
+                } else {
+                    Icon(Icons.Default.Call, "Book Call")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Book Call", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

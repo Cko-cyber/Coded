@@ -6,6 +6,7 @@ import com.google.firebase.firestore.PropertyName
 data class Message(
     val id: String = "",
 
+    // ✅ Use consistent field names - choose ONE naming convention
     @PropertyName("listing_id")
     val listingId: String = "",
 
@@ -23,7 +24,7 @@ data class Message(
     @PropertyName("created_at")
     val createdAt: Timestamp = Timestamp.now(),
 
-    // ✅ ADD THIS FIELD - it's required for querying
+    // ✅ CRITICAL: Add chat_id field
     @PropertyName("chat_id")
     val chatId: String = ""
 )

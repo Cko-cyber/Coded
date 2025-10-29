@@ -44,34 +44,6 @@ fun NavGraph(
             ProfileScreen(navController, authRepository)
         }
 
-        // ✅ Messages with optional parameters for direct chat
-        composable(
-            route = "${Screen.Messages.route}?listingId={listingId}&sellerId={sellerId}",
-            arguments = listOf(
-                navArgument("listingId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-                navArgument("sellerId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                }
-            )
-        ) { backStackEntry ->
-            val listingId = backStackEntry.arguments?.getString("listingId")
-            val sellerId = backStackEntry.arguments?.getString("sellerId")
-
-            MessagesScreen(
-                navController = navController,
-                authRepository = authRepository,
-                listingId = listingId,
-                sellerId = sellerId
-            )
-        }
-
-        // ✅ Also support simple messages route
         composable(Screen.Messages.route) {
             MessagesScreen(navController, authRepository)
         }
@@ -82,6 +54,45 @@ fun NavGraph(
         ) { backStackEntry ->
             val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
             SingleStockScreen(navController, listingId, authRepository)
+        }
+
+        // Chat Screen - FIXED ROUTE
+        composable(
+            route = "chat/{listingId}/{sellerId}",
+            arguments = listOf(
+                navArgument("listingId") { type = NavType.StringType },
+                navArgument("sellerId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
+            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
+            ChatScreen(navController, listingId, sellerId, authRepository)
+        }
+
+        // Book Call Screen - NEW
+        composable(
+            route = "book_call/{listingId}/{sellerId}",
+            arguments = listOf(
+                navArgument("listingId") { type = NavType.StringType },
+                navArgument("sellerId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
+            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
+            BookCallScreen(navController, listingId, sellerId, authRepository)
+        }
+
+        // Schedule Viewing Screen - NEW
+        composable(
+            route = "schedule_viewing/{listingId}/{sellerId}",
+            arguments = listOf(
+                navArgument("listingId") { type = NavType.StringType },
+                navArgument("sellerId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
+            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
+            ScheduleViewingScreen(navController, listingId, sellerId, authRepository)
         }
 
         // Profile Sub-screens
@@ -107,6 +118,11 @@ fun NavGraph(
 
         composable("contact_support") {
             ContactSupportScreen(navController, authRepository)
+        }
+
+        // Notifications Screen - NEW
+        composable("notifications") {
+            NotificationsScreen(navController, authRepository)
         }
     }
 }
