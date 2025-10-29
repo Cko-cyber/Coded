@@ -179,7 +179,7 @@ fun MessagesScreen(
                                 reverseLayout = true
                             ) {
                                 items(messages.reversed()) { message ->
-                                    MessageBubble(
+                                    ChatMessageBubble( // CHANGED: Using different name
                                         message = message,
                                         isCurrentUser = message.senderId == currentUser?.id
                                     )
@@ -306,8 +306,9 @@ fun MessagesScreen(
     }
 }
 
+// CHANGED: Renamed to avoid conflict with ChatScreen's MessageBubble
 @Composable
-fun MessageBubble(message: Message, isCurrentUser: Boolean) {
+fun ChatMessageBubble(message: Message, isCurrentUser: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start

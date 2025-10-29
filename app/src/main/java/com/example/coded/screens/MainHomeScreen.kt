@@ -28,6 +28,8 @@ import coil.compose.AsyncImage
 import com.example.coded.data.AuthRepository
 import com.example.coded.data.Listing
 import com.example.coded.viewmodels.ListingsViewModel
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -37,6 +39,30 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
     val currentRoute = navBackStackEntry?.destination?.route
     val listingsViewModel: ListingsViewModel = viewModel()
     val allListings by listingsViewModel.listings.collectAsState()
+    val currentUser by authRepository.currentUser.collectAsState()
+    val firestore = FirebaseFirestore.getInstance()
+
+    var unreadNotificationsCount by remember { mutableStateOf(0) }
+    var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
+
+    // Listen for unread notifications count
+    LaunchedEffect(currentUser) {
+        if (currentUser != null) {
+            listenerRegistration = firestore.collection("notifications")
+                .whereEqualTo("userId", currentUser?.id ?: "") // Use safe call with default value
+                .whereEqualTo("isRead", false)
+                .addSnapshotListener { snapshot, _ ->
+                    unreadNotificationsCount = snapshot?.size() ?: 0
+                }
+        }
+    }
+
+    // Cleanup listener
+    DisposableEffect(Unit) {
+        onDispose {
+            listenerRegistration?.remove()
+        }
+    }
 
     // Load listings when screen opens
     LaunchedEffect(Unit) {
@@ -57,6 +83,30 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
                     titleContentColor = Color.White
                 ),
                 actions = {
+                    // Notification bell with badge
+                    BadgedBox(
+                        badge = {
+                            if (unreadNotificationsCount > 0) {
+                                Badge(
+                                    containerColor = Color(0xFFFF6F00),
+                                    contentColor = Color.White
+                                ) {
+                                    Text("$unreadNotificationsCount")
+                                }
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = {
+                            navController.navigate("notifications")
+                        }) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = "Notifications",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
                     IconButton(onClick = { navController.navigate(Screen.Profile.route) }) {
                         Icon(
                             Icons.Default.Person,
@@ -91,11 +141,11 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
                 )
 
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Support, contentDescription = "Support") },
-                    label = { Text("Support") },
-                    selected = currentRoute == "support",
+                    icon = { Icon(Icons.Default.List, contentDescription = "Listings") },
+                    label = { Text("Listings") },
+                    selected = currentRoute == Screen.Listings.route,
                     onClick = {
-                        navController.navigate("faqs")
+                        navController.navigate(Screen.Listings.route)
                     },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Color(0xFF013B33),
@@ -109,15 +159,15 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
                 NavigationBarItem(
                     icon = {
                         Icon(
-                            Icons.Default.List,
-                            contentDescription = "Listings",
+                            Icons.Default.Add,
+                            contentDescription = "Create",
                             modifier = Modifier.size(32.dp)
                         )
                     },
-                    label = { Text("Listings") },
-                    selected = currentRoute == Screen.Listings.route,
+                    label = { Text("Create") },
+                    selected = currentRoute == Screen.CreateListing.route,
                     onClick = {
-                        navController.navigate(Screen.Listings.route)
+                        navController.navigate(Screen.CreateListing.route)
                     },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Color(0xFFFF6F00),
@@ -145,19 +195,16 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
                 )
 
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Logout, contentDescription = "Logout") },
-                    label = { Text("Logout") },
-                    selected = false,
+                    icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
+                    label = { Text("Profile") },
+                    selected = currentRoute == Screen.Profile.route,
                     onClick = {
-                        authRepository.signOut()
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0)
-                        }
+                        navController.navigate(Screen.Profile.route)
                     },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Red,
-                        selectedTextColor = Color.Red,
-                        indicatorColor = Color.Red.copy(alpha = 0.1f),
+                        selectedIconColor = Color(0xFF013B33),
+                        selectedTextColor = Color(0xFF013B33),
+                        indicatorColor = Color(0xFF013B33).copy(alpha = 0.1f),
                         unselectedIconColor = Color.Gray,
                         unselectedTextColor = Color.Gray
                     )
