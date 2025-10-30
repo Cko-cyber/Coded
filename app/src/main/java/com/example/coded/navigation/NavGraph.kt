@@ -44,8 +44,9 @@ fun NavGraph(
             ProfileScreen(navController, authRepository)
         }
 
+        // REMOVED DUPLICATE: Only define Messages.route once
         composable(Screen.Messages.route) {
-            MessagesScreen(navController, authRepository)
+            EnhancedMessagesScreen(navController, authRepository)
         }
 
         composable(
@@ -56,7 +57,7 @@ fun NavGraph(
             SingleStockScreen(navController, listingId, authRepository)
         }
 
-        // ADD EDIT LISTING ROUTE HERE
+        // Edit Listing Route
         composable(
             route = "edit_listing/{listingId}",
             arguments = listOf(navArgument("listingId") { type = NavType.StringType })
@@ -65,20 +66,30 @@ fun NavGraph(
             EditListingScreen(navController, listingId)
         }
 
-        // Chat Screen - FIXED ROUTE
+        // Chat Screen - CORRECTED ROUTE (only define once)
         composable(
-            route = "chat/{listingId}/{sellerId}",
+            route = "chat/{userId}/{listingId}",
             arguments = listOf(
-                navArgument("listingId") { type = NavType.StringType },
-                navArgument("sellerId") { type = NavType.StringType }
+                navArgument("userId") { type = NavType.StringType },
+                navArgument("listingId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
             )
         ) { backStackEntry ->
-            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
-            val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
-            ChatScreen(navController, listingId, sellerId, authRepository)
+            val otherUserId = backStackEntry.arguments?.getString("userId") ?: ""
+            val listingId = backStackEntry.arguments?.getString("listingId")
+
+            EnhancedChatScreen(
+                navController = navController,
+                otherUserId = otherUserId,
+                listingId = listingId,
+                authRepository = authRepository
+            )
         }
 
-        // Book Call Screen - NEW
+        // Book Call Screen
         composable(
             route = "book_call/{listingId}/{sellerId}",
             arguments = listOf(
@@ -91,7 +102,7 @@ fun NavGraph(
             BookCallScreen(navController, listingId, sellerId, authRepository)
         }
 
-        // Schedule Viewing Screen - NEW
+        // Schedule Viewing Screen
         composable(
             route = "schedule_viewing/{listingId}/{sellerId}",
             arguments = listOf(
@@ -129,7 +140,7 @@ fun NavGraph(
             ContactSupportScreen(navController, authRepository)
         }
 
-        // Notifications Screen - NEW
+        // Notifications Screen
         composable("notifications") {
             NotificationsScreen(navController, authRepository)
         }

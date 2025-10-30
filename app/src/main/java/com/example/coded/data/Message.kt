@@ -14,6 +14,3 @@ data class Message(
     val chatId: String = ""
 )
 
-enum class MessageStatus {
-    SENT, DELIVERED, READ
-}

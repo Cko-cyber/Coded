@@ -1,74 +1,89 @@
-package com.example.coded.viewmodel
+package com.example.coded.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.coded.data.Chat
-import com.example.coded.data.Message
-import com.example.coded.data.MessageRepository
-import com.example.coded.data.MessageStatus
+import com.example.coded.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class MessageViewModel(
-    private val repository: MessageRepository = MessageRepository()
+    private val messageRepository: EnhancedMessageRepository
 ) : ViewModel() {
+    private val _messages = MutableStateFlow<List<ConversationMessage>>(emptyList())
+    val messages: StateFlow<List<ConversationMessage>> = _messages.asStateFlow()
 
-    // Real-time list of chats
-    private val _userChats = MutableStateFlow<List<Chat>>(emptyList())
-    val userChats: StateFlow<List<Chat>> = _userChats.asStateFlow()
-
-    // Real-time list of messages for current chat
-    private val _messages = MutableStateFlow<List<Message>>(emptyList())
-    val messages: StateFlow<List<Message>> = _messages.asStateFlow()
-
-    // For UI loading and status states
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    // ✅ Load chats for a specific user in real-time
-    fun loadUserChats(userId: String) {
-        viewModelScope.launch {
-            repository.getUserChats(userId)
-                .catch { e -> _errorMessage.value = e.message }
-                .collect { chats -> _userChats.value = chats }
-        }
+    suspend fun getOrCreateConversation(userId1: String, userId2: String): String {
+        return messageRepository.getOrCreateConversation(userId1, userId2)
     }
 
-    // ✅ Load messages for a specific chat
-    fun loadMessages(chatId: String) {
-        viewModelScope.launch {
-            repository.getMessages(chatId)
-                .catch { e -> _errorMessage.value = e.message }
-                .collect { msgs -> _messages.value = msgs }
-        }
-    }
-
-    // ✅ Send message
-    fun sendMessage(message: Message) {
+    fun loadConversationMessages(conversationId: String) {
         viewModelScope.launch {
             _isLoading.value = true
-            val success = repository.sendMessage(message)
-            _isLoading.value = false
-            if (!success) {
-                _errorMessage.value = "Failed to send message"
+            _errorMessage.value = null
+            try {
+                messageRepository.observeMessages(conversationId).collect { messages ->
+                    _messages.value = messages
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to load messages: ${e.message}"
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
-    // ✅ Mark messages as read (when chat is opened)
-    fun markMessagesAsRead(chatId: String, userId: String) {
+    fun sendMessage(
+        conversationId: String,
+        senderId: String,
+        receiverId: String,
+        content: String,
+        listingId: String? = null
+    ) {
         viewModelScope.launch {
-            repository.markMessagesAsRead(chatId, userId)
+            try {
+                messageRepository.sendMessage(
+                    conversationId = conversationId,
+                    senderId = senderId,
+                    receiverId = receiverId,
+                    content = content,
+                    listingId = listingId
+                )
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to send message: ${e.message}"
+            }
         }
     }
 
-    // ✅ Update message status (delivered, read, etc.)
-    fun updateMessageStatus(messageId: String, status: MessageStatus) {
+    fun markMessagesAsRead(conversationId: String, userId: String) {
         viewModelScope.launch {
-            repository.updateMessageStatus(messageId, status)
+            messageRepository.markMessagesAsRead(conversationId, userId)
         }
     }
+
+    fun markMessagesAsDelivered(conversationId: String, userId: String) {
+        // Note: Your repository doesn't have markMessagesAsDelivered, so we'll use markMessagesAsRead
+        viewModelScope.launch {
+            messageRepository.markMessagesAsRead(conversationId, userId)
+        }
+    }
+
+    fun addReaction(conversationId: String, messageId: String, userId: String, emoji: String) {
+        viewModelScope.launch {
+            messageRepository.addReaction(conversationId, messageId, userId, emoji)
+        }
+    }
+
+    fun deleteMessage(conversationId: String, messageId: String, userId: String) {
+        viewModelScope.launch {
+            messageRepository.deleteMessage(conversationId, messageId, userId)
+        }
+    }
+
+    fun getQuickReplies(): List<String> = messageRepository.getQuickReplies()
 }

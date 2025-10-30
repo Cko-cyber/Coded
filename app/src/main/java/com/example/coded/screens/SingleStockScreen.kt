@@ -60,16 +60,16 @@ fun SingleStockScreen(
             onDismiss = { showBookingDialog = false },
             onBookCall = {
                 showBookingDialog = false
-                // Check if seller info is available before navigating
-                if (listing != null) {
-                    navController.navigate("book_call/${listingId}/${listing!!.user_id}")
+                // Use safe call and null check
+                listing?.let {
+                    navController.navigate("book_call/${listingId}/${it.user_id}")
                 }
             },
             onScheduleViewing = {
                 showBookingDialog = false
-                // Check if seller info is available before navigating
-                if (listing != null) {
-                    navController.navigate("schedule_viewing/${listingId}/${listing!!.user_id}")
+                // Use safe call and null check
+                listing?.let {
+                    navController.navigate("schedule_viewing/${listingId}/${it.user_id}")
                 }
             }
         )
@@ -147,9 +147,8 @@ fun SingleStockScreen(
                             // Message Button
                             Button(
                                 onClick = {
-                                    // Check if seller info is available before navigating
-                                    if (listing != null) {
-                                        navController.navigate("chat/${listingId}/${listing!!.user_id}")
+                                    listing?.let {
+                                        navController.navigate("chat/${it.user_id}/${it.id}")
                                     }
                                 },
                                 modifier = Modifier.weight(1f),
@@ -246,6 +245,9 @@ fun SingleStockScreen(
                 }
             }
         } else {
+            // Use !! here since we've already checked listing != null
+            val currentListing = listing!!
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -253,8 +255,8 @@ fun SingleStockScreen(
                     .verticalScroll(rememberScrollState())
             ) {
                 // Image Carousel
-                if (listing!!.image_urls.isNotEmpty()) {
-                    ImageCarousel(listing!!.image_urls)
+                if (currentListing.image_urls.isNotEmpty()) {
+                    ImageCarousel(currentListing.image_urls)
                 } else {
                     Box(
                         modifier = Modifier
@@ -288,7 +290,7 @@ fun SingleStockScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val tierEnum = listing!!.getTierEnum()
+                        val tierEnum = currentListing.getTierEnum()
                         Surface(
                             color = when (tierEnum) {
                                 com.example.coded.data.ListingTier.FREE -> Color(0xFF4CAF50)
@@ -311,11 +313,11 @@ fun SingleStockScreen(
                         }
 
                         Surface(
-                            color = if (listing!!.is_active) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
+                            color = if (currentListing.is_active) Color(0xFF4CAF50) else Color(0xFF9E9E9E),
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = if (listing!!.is_active) "ACTIVE" else "INACTIVE",
+                                text = if (currentListing.is_active) "ACTIVE" else "INACTIVE",
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White,
@@ -333,14 +335,14 @@ fun SingleStockScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = listing!!.breed,
+                            text = currentListing.breed,
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF013B33),
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            text = "E ${listing!!.price}",
+                            text = "E ${currentListing.price}",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF013B33)
@@ -356,12 +358,12 @@ fun SingleStockScreen(
                     ) {
                         DetailCard(
                             title = "Age",
-                            value = listing!!.age,
+                            value = currentListing.age,
                             modifier = Modifier.weight(1f)
                         )
                         DetailCard(
                             title = "Location",
-                            value = listing!!.location,
+                            value = currentListing.location,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -475,7 +477,7 @@ fun SingleStockScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Health Information
-                    if (listing!!.vaccination_status.isNotEmpty() || listing!!.deworming.isNotEmpty()) {
+                    if (currentListing.vaccination_status.isNotEmpty() || currentListing.deworming.isNotEmpty()) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E8))
@@ -494,20 +496,20 @@ fun SingleStockScreen(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                if (listing!!.vaccination_status.isNotEmpty()) {
+                                if (currentListing.vaccination_status.isNotEmpty()) {
                                     DetailRow(
                                         icon = Icons.Default.MedicalServices,
                                         title = "Vaccination Status",
-                                        value = listing!!.vaccination_status
+                                        value = currentListing.vaccination_status
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                 }
 
-                                if (listing!!.deworming.isNotEmpty()) {
+                                if (currentListing.deworming.isNotEmpty()) {
                                     DetailRow(
                                         icon = Icons.Default.HealthAndSafety,
                                         title = "Deworming Status",
-                                        value = listing!!.deworming
+                                        value = currentListing.deworming
                                     )
                                 }
                             }
@@ -516,7 +518,7 @@ fun SingleStockScreen(
                     }
 
                     // Full Description
-                    if (listing!!.full_details.isNotEmpty()) {
+                    if (currentListing.full_details.isNotEmpty()) {
                         Card(
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -535,7 +537,7 @@ fun SingleStockScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text(
-                                    text = listing!!.full_details,
+                                    text = currentListing.full_details,
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
@@ -545,7 +547,7 @@ fun SingleStockScreen(
                     // Listing Metadata
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Listed on ${listing!!.created_at.toDate().toString().substring(0, 10)}",
+                        text = "Listed on ${currentListing.created_at.toDate().toString().substring(0, 10)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )

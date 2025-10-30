@@ -1,154 +1,104 @@
 package com.example.coded.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.rounded.Quickreply
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.coded.data.AuthRepository
-import com.example.coded.data.Message
-import com.example.coded.data.MessageRepository
-import com.example.coded.data.MessageStatus
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.Query
+import com.example.coded.AppModule
+import com.example.coded.data.*
+import com.example.coded.viewmodels.MessageViewModel
+import com.example.coded.viewmodels.MessageViewModelFactory
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ChatScreen(
+fun EnhancedChatScreen(
     navController: NavController,
-    listingId: String,
-    sellerId: String,
+    otherUserId: String,
+    listingId: String?,
     authRepository: AuthRepository
 ) {
+    // --- ViewModel (use factory so Compose can construct it properly) ---
+    val viewModel: MessageViewModel = viewModel(
+        factory = MessageViewModelFactory(AppModule.messageRepository)
+    )
+
+    // --- State from Auth + ViewModel ---
     val currentUser by authRepository.currentUser.collectAsState()
-    val firestore = FirebaseFirestore.getInstance()
-    val messageRepository = remember { MessageRepository() }
+    val messages by viewModel.messages.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
-    var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
-    var messageText by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(true) }
-    var isSending by remember { mutableStateOf(false) }
-    var sellerName by remember { mutableStateOf("Seller") }
-    var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
-
-    val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
-    // Generate chat ID
-    val chatId = remember(currentUser?.id, sellerId, listingId) {
-        generateChatId(currentUser?.id ?: "", sellerId, listingId)
-    }
+    var messageText by remember { mutableStateOf("") }
+    var conversationId by remember { mutableStateOf<String?>(null) }
+    var showQuickReplies by remember { mutableStateOf(false) }
+    var selectedMessage by remember { mutableStateOf<ConversationMessage?>(null) }
 
-    // Load seller's real name
-    LaunchedEffect(sellerId) {
-        val user = messageRepository.getUserById(sellerId)
-        sellerName = user?.full_name ?: "User ${sellerId.takeLast(6)}"
-    }
-
-    // Real-time message listener
-    LaunchedEffect(chatId, currentUser) {
-        if (currentUser != null) {
-            println("🔄 ChatScreen: Setting up listener for chat: $chatId")
-
-            listenerRegistration?.remove()
-
-            listenerRegistration = firestore.collection("messages")
-                .whereEqualTo("chat_id", chatId)
-                .orderBy("created_at", Query.Direction.ASCENDING)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        isLoading = false
-                        println("❌ ChatScreen listener error: ${error.message}")
-                        return@addSnapshotListener
-                    }
-
-                    if (snapshot != null) {
-                        val newMessages = snapshot.documents.mapNotNull { doc ->
-                            try {
-                                Message(
-                                    id = doc.id,
-                                    listingId = doc.getString("listing_id") ?: "",
-                                    senderId = doc.getString("sender_id") ?: "",
-                                    receiverId = doc.getString("receiver_id") ?: "",
-                                    content = doc.getString("content") ?: "",
-                                    isRead = doc.getBoolean("is_read") ?: false,
-                                    status = MessageStatus.valueOf(doc.getString("status") ?: "SENT"),
-                                    createdAt = doc.getTimestamp("created_at") ?: Timestamp.now(),
-                                    chatId = doc.getString("chat_id") ?: ""
-                                )
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
-
-                        messages = newMessages
-                        println("✅ ChatScreen: Loaded ${messages.size} messages for chat: $chatId")
-                        isLoading = false
-
-                        // Auto-scroll to bottom
-                        coroutineScope.launch {
-                            if (messages.isNotEmpty()) {
-                                listState.animateScrollToItem(messages.size - 1)
-                            }
-                        }
-
-                        // Update message statuses
-                        coroutineScope.launch {
-                            // Mark messages as delivered
-                            messages.forEach { message ->
-                                if (message.receiverId == currentUser!!.id &&
-                                    message.status == MessageStatus.SENT) {
-                                    messageRepository.updateMessageToDelivered(message.id)
-                                }
-                            }
-
-                            // Mark messages as read
-                            messageRepository.markMessagesAsRead(chatId, currentUser!!.id)
-                        }
-                    }
-                }
+    // Create/get conversation when we have currentUser
+    LaunchedEffect(currentUser?.id, otherUserId) {
+        val meId = currentUser?.id
+        if (!meId.isNullOrBlank()) {
+            try {
+                val convId = viewModel.getOrCreateConversation(meId, otherUserId)
+                conversationId = convId
+                viewModel.loadConversationMessages(convId)
+            } catch (e: Exception) {
+                // propagate to viewModel error state
+            }
         }
     }
 
-    // Cleanup
-    DisposableEffect(Unit) {
-        onDispose {
-            listenerRegistration?.remove()
+    // Mark as read when opening
+    LaunchedEffect(conversationId, currentUser?.id) {
+        val conv = conversationId
+        val meId = currentUser?.id
+        if (!conv.isNullOrBlank() && !meId.isNullOrBlank()) {
+            viewModel.markMessagesAsRead(conv, meId)
+            viewModel.markMessagesAsDelivered(conv, meId)
+        }
+    }
+
+    // Auto-scroll to bottom when messages change
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text(sellerName, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            text = "Online", // Simple online status
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-                },
+                title = { Text("Chat") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -157,49 +107,94 @@ fun ChatScreen(
                     navigationIconContentColor = Color.White
                 ),
                 actions = {
-                    IconButton(onClick = {
-                        navController.navigate("single_stock/$listingId")
-                    }) {
-                        Icon(Icons.Default.Info, "Listing Info", tint = Color.White)
+                    if (listingId != null) {
+                        IconButton(onClick = {
+                            navController.navigate("single_stock/$listingId")
+                        }) {
+                            Icon(Icons.Filled.Info, contentDescription = "View Listing", tint = Color.White)
+                        }
                     }
                 }
             )
         },
         bottomBar = {
-            MessageInputSection(
-                messageText = messageText,
-                onMessageTextChange = { messageText = it },
-                onSendMessage = {
-                    if (messageText.isNotBlank() && currentUser != null && !isSending) {
-                        isSending = true
-                        coroutineScope.launch {
-                            val message = Message(
-                                id = UUID.randomUUID().toString(),
-                                listingId = listingId,
-                                senderId = currentUser!!.id,
-                                receiverId = sellerId,
-                                content = messageText.trim(),
-                                isRead = false,
-                                status = MessageStatus.SENT,
-                                createdAt = Timestamp.now(),
-                                chatId = chatId
-                            )
-
-                            println("📤 ChatScreen: Sending message to chat: $chatId")
-
-                            val success = messageRepository.sendMessage(message)
-                            if (success) {
-                                messageText = ""
-                                println("✅ ChatScreen: Message sent and input cleared!")
-                            } else {
-                                println("❌ ChatScreen: Failed to send message")
+            Surface(tonalElevation = 8.dp, shadowElevation = 8.dp) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Quick replies
+                    if (showQuickReplies) {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(viewModel.getQuickReplies()) { reply ->
+                                SuggestionChip(
+                                    onClick = {
+                                        messageText = reply
+                                        showQuickReplies = false
+                                    },
+                                    label = { Text(reply, style = MaterialTheme.typography.bodySmall) }
+                                )
                             }
-                            isSending = false
                         }
                     }
-                },
-                isSending = isSending
-            )
+
+                    // Message input row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Quick reply toggle
+                        IconButton(onClick = { showQuickReplies = !showQuickReplies }) {
+                            Icon(
+                                if (showQuickReplies) Icons.Filled.Close else Icons.Rounded.Quickreply,
+                                contentDescription = "Quick Replies"
+                            )
+                        }
+
+                        // Text input
+                        OutlinedTextField(
+                            value = messageText,
+                            onValueChange = { messageText = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("Type a message...") },
+                            maxLines = 5
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Send button
+                        IconButton(
+                            onClick = {
+                                val meId = currentUser?.id
+                                val conv = conversationId
+                                if (messageText.isNotBlank() && !meId.isNullOrBlank() && !conv.isNullOrBlank()) {
+                                    coroutineScope.launch {
+                                        viewModel.sendMessage(
+                                            conversationId = conv,
+                                            senderId = meId,
+                                            receiverId = otherUserId,
+                                            content = messageText.trim(),
+                                            listingId = listingId
+                                        )
+                                        messageText = ""
+                                        showQuickReplies = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(Color(0xFF013B33), CircleShape),
+                            enabled = messageText.isNotBlank()
+                        ) {
+                            Icon(Icons.Filled.Send, contentDescription = "Send", tint = Color.White)
+                        }
+                    }
+                }
+            }
         }
     ) { padding ->
         Box(
@@ -208,197 +203,177 @@ fun ChatScreen(
                 .padding(padding)
                 .background(Color(0xFFF5F5F5))
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = Color(0xFF013B33)
-                )
-            } else if (messages.isEmpty()) {
-                EmptyChatState(sellerName = sellerName)
-            } else {
-                MessagesList(
-                    messages = messages,
-                    currentUserId = currentUser?.id ?: "",
-                    listState = listState
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun MessageInputSection(
-    messageText: String,
-    onMessageTextChange: (String) -> Unit,
-    onSendMessage: () -> Unit,
-    isSending: Boolean
-) {
-    Surface(
-        tonalElevation = 8.dp,
-        shadowElevation = 8.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = messageText,
-                onValueChange = onMessageTextChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Type a message...") },
-                maxLines = 3,
-                enabled = !isSending,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF013B33),
-                    unfocusedBorderColor = Color.Gray
-                )
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            IconButton(
-                onClick = onSendMessage,
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(Color(0xFF013B33), RoundedCornerShape(24.dp)),
-                enabled = messageText.isNotBlank() && !isSending
-            ) {
-                if (isSending) {
+            when {
+                isLoading && messages.isEmpty() -> {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.Send,
-                        "Send",
-                        tint = Color.White
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Color(0xFF013B33)
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun EmptyChatState(sellerName: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            Icons.Default.Chat,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = Color.Gray
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "No messages with $sellerName yet",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.Gray
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Start the conversation!",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray
-        )
-    }
-}
-
-@Composable
-fun MessagesList(
-    messages: List<Message>,
-    currentUserId: String,
-    listState: androidx.compose.foundation.lazy.LazyListState
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(messages) { message ->
-            EnhancedMessageBubble(
-                message = message,
-                isCurrentUser = message.senderId == currentUserId
-            )
-        }
-    }
-}
-
-@Composable
-fun EnhancedMessageBubble(message: Message, isCurrentUser: Boolean) {
-    val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
-    ) {
-        Card(
-            modifier = Modifier.widthIn(max = 300.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isCurrentUser) Color(0xFF013B33) else Color.White
-            ),
-            shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (isCurrentUser) 16.dp else 4.dp,
-                bottomEnd = if (isCurrentUser) 4.dp else 16.dp
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp)
-            ) {
-                Text(
-                    text = message.content,
-                    color = if (isCurrentUser) Color.White else Color.Black,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    // WhatsApp-like status indicators
-                    if (isCurrentUser) {
-                        val (icon, color) = when (message.status) {
-                            MessageStatus.SENT -> Pair(Icons.Default.Done, Color.White.copy(alpha = 0.7f))
-                            MessageStatus.DELIVERED -> Pair(Icons.Default.DoneAll, Color.White.copy(alpha = 0.7f))
-                            MessageStatus.READ -> Pair(Icons.Default.DoneAll, Color(0xFF4CAF50))
-                        }
-
-                        Icon(
-                            icon,
-                            contentDescription = "Message status",
-                            modifier = Modifier.size(12.dp),
-                            tint = color
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
+                errorMessage != null -> {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Filled.Error, contentDescription = null, modifier = Modifier.size(48.dp), tint = Color.Red)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(errorMessage ?: "", color = Color.Red)
                     }
+                }
+                messages.isEmpty() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Filled.Chat, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("No messages yet", color = Color.Gray)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Start the conversation!", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(messages) { message ->
+                            val isCurrentUser = message.senderId == currentUser?.id
 
-                    Text(
-                        text = dateFormat.format(message.createdAt.toDate()),
-                        color = if (isCurrentUser) Color.White.copy(alpha = 0.7f) else Color.Gray,
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                            // If message is soft-deleted for this user, skip
+                            if (message.deletedFor.contains(currentUser?.id)) return@items
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
+                            ) {
+                                Card(
+                                    modifier = Modifier
+                                        .widthIn(max = 280.dp)
+                                        .combinedClickable(
+                                            onClick = { /* no-op */ },
+                                            onLongClick = { selectedMessage = message }
+                                        ),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isCurrentUser) Color(0xFF013B33) else Color.White
+                                    ),
+                                    shape = RoundedCornerShape(
+                                        topStart = 16.dp,
+                                        topEnd = 16.dp,
+                                        bottomStart = if (isCurrentUser) 16.dp else 4.dp,
+                                        bottomEnd = if (isCurrentUser) 4.dp else 16.dp
+                                    )
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = message.content,
+                                            color = if (isCurrentUser) Color.White else Color.Black
+                                        )
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Created time
+                                            Text(
+                                                text = try {
+                                                    SimpleDateFormat("HH:mm", Locale.getDefault())
+                                                        .format(message.createdAt.toDate())
+                                                } catch (e: Exception) {
+                                                    ""
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isCurrentUser) Color.White.copy(0.7f) else Color.Gray
+                                            )
+
+                                            // Delivery/read icons for own messages
+                                            if (isCurrentUser) {
+                                                Icon(
+                                                    imageVector = when (message.status) {
+                                                        "READ" -> Icons.Filled.ArrowBack /* placeholder, keep icons as needed */
+                                                        "DELIVERED" -> Icons.Filled.ArrowBack
+                                                        else -> Icons.Filled.ArrowBack
+                                                    },
+                                                    contentDescription = message.status,
+                                                    tint = if (message.status == "READ") Color(0xFF4CAF50) else Color.White.copy(0.7f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+
+                                        // Reactions (if any)
+                                        if (!message.reactions.isNullOrEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = message.reactions.values.joinToString(" "),
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
-}
 
-private fun generateChatId(user1: String, user2: String, listingId: String): String {
-    val participants = listOf(user1, user2).sorted()
-    return "${participants[0]}_${participants[1]}_$listingId"
+    // Message actions dialog (react / delete)
+    if (selectedMessage != null) {
+        AlertDialog(
+            onDismissRequest = { selectedMessage = null },
+            title = { Text("Message Actions") },
+            text = {
+                Column {
+                    Text("React to this message:", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val reactions = listOf("👍", "❤️", "😊", "🔥", "👏")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(reactions) { emoji ->
+                            TextButton(onClick = {
+                                coroutineScope.launch {
+                                    val conv = conversationId
+                                    val meId = currentUser?.id
+                                    if (!conv.isNullOrBlank() && !meId.isNullOrBlank() && selectedMessage != null) {
+                                        viewModel.addReaction(conv, selectedMessage!!.id, meId, emoji)
+                                    }
+                                    selectedMessage = null
+                                }
+                            }) {
+                                Text(emoji, style = MaterialTheme.typography.headlineMedium)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    coroutineScope.launch {
+                        val conv = conversationId
+                        val meId = currentUser?.id
+                        if (!conv.isNullOrBlank() && !meId.isNullOrBlank() && selectedMessage != null) {
+                            viewModel.deleteMessage(conv, selectedMessage!!.id, meId)
+                        }
+                        selectedMessage = null
+                    }
+                }) {
+                    Text("Delete", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedMessage = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
