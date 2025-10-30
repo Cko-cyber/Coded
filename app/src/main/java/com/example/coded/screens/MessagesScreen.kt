@@ -428,7 +428,9 @@ fun ConversationItem(
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = dateFormat.format(conversation.lastMessageTime.toDate()),
+                    text = conversation.lastMessageTime?.toDate()?.let { date ->
+                        dateFormat.format(date)
+                    } ?: "",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
@@ -540,8 +542,9 @@ fun ChatView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = SimpleDateFormat("HH:mm", Locale.getDefault())
-                                    .format(message.createdAt.toDate()),
+                                text = message.createdAt?.toDate()?.let { date ->
+                                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
+                                } ?: "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (isCurrentUser) Color.White.copy(0.7f) else Color.Gray
                             )

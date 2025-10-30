@@ -16,14 +16,19 @@ data class Listing(
     val vaccination_status: String = "",
     val full_details: String = "",
     val image_urls: List<String> = emptyList(),
-
+    @field:PropertyName("is_active")
+    val isActive: Boolean = true,
     @PropertyName("listingTier")
     val listingTier: String = "FREE",
-
+    val userId: String = "",
     val is_active: Boolean = true,
     val created_at: Timestamp = Timestamp.now()
 ) {
     companion object {
+        // Move constants outside the fromMap function
+        const val FIELD_IS_ACTIVE = "is_active"
+        const val FIELD_USER_ID = "user_id"
+
         fun fromMap(id: String, data: Map<String, Any>): Listing {
             return Listing(
                 id = id,

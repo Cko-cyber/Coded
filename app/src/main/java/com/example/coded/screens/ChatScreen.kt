@@ -285,8 +285,9 @@ fun EnhancedChatScreen(
                                             // Created time
                                             Text(
                                                 text = try {
-                                                    SimpleDateFormat("HH:mm", Locale.getDefault())
-                                                        .format(message.createdAt.toDate())
+                                                    message.createdAt?.toDate()?.let { date ->
+                                                        SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
+                                                    } ?: ""
                                                 } catch (e: Exception) {
                                                     ""
                                                 },
