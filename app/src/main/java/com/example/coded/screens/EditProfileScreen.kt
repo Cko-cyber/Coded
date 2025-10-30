@@ -39,13 +39,13 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
     var mobileNumber by remember { mutableStateOf(currentUser?.mobile_number ?: "") }
     var location by remember { mutableStateOf(currentUser?.location ?: "") }
     var profilePicUri by remember { mutableStateOf<Uri?>(null) }
+    var showRemoveDialog by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var isUploadingPic by remember { mutableStateOf(false) }
     var uploadProgress by remember { mutableStateOf(0f) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
 
-    // Image picker
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -58,6 +58,52 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
             mobileNumber = it.mobile_number
             location = it.location
         }
+    }
+
+    // Remove Profile Picture Dialog
+    if (showRemoveDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = Color.Red,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = { Text("Remove Profile Picture") },
+            text = { Text("Are you sure you want to remove your profile picture?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRemoveDialog = false
+                        coroutineScope.launch {
+                            isLoading = true
+                            val updatedUser = currentUser!!.copy(profile_pic = "")
+                            val success = authRepository.updateUser(updatedUser)
+                            if (success) {
+                                successMessage = "Profile picture removed"
+                                profilePicUri = null
+                            } else {
+                                errorMessage = "Failed to remove profile picture"
+                            }
+                            isLoading = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.Red
+                    )
+                ) {
+                    Text("Remove")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -96,7 +142,6 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
             Box(
                 modifier = Modifier.size(140.dp)
             ) {
-                // Profile Image
                 Box(
                     modifier = Modifier
                         .size(140.dp)
@@ -128,7 +173,6 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                         )
                     }
 
-                    // Upload progress overlay
                     if (isUploadingPic) {
                         Box(
                             modifier = Modifier
@@ -144,13 +188,13 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                     }
                 }
 
-                // Camera icon button
+                // Edit icon button
                 FloatingActionButton(
                     onClick = { imagePickerLauncher.launch("image/*") },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .size(40.dp),
-                    containerColor = Color(0xFFFF6F00)
+                    containerColor = Color(0xFF013B33)
                 ) {
                     Icon(
                         Icons.Default.CameraAlt,
@@ -159,10 +203,28 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
                         modifier = Modifier.size(20.dp)
                     )
                 }
+
+                // Remove button (only show if there's a profile picture)
+                if (!currentUser?.profile_pic.isNullOrEmpty() || profilePicUri != null) {
+                    FloatingActionButton(
+                        onClick = { showRemoveDialog = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .size(40.dp),
+                        containerColor = Color.Red
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Remove Picture",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
 
             Text(
-                text = "Tap to change profile picture",
+                text = "Tap to change or remove picture",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray,
                 modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
@@ -354,7 +416,10 @@ fun EditProfileScreen(navController: NavController, authRepository: AuthReposito
 
             OutlinedButton(
                 onClick = { navController.popBackStack() },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color(0xFF013B33)
+                )
             ) {
                 Text("Cancel")
             }

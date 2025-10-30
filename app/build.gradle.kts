@@ -69,6 +69,10 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx:23.4.0")
+    implementation("androidx.core:core-ktx:1.12.0")
+// For notifications
+    implementation("androidx.core:core:1.12.0")
 
     // Other UI dependencies
     implementation("io.coil-kt:coil-compose:2.4.0")

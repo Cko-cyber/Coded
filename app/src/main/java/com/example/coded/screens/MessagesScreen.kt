@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,8 +22,11 @@ import com.example.coded.data.Chat
 import com.example.coded.data.Message
 import com.example.coded.data.MessageRepository
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -36,6 +40,7 @@ fun MessagesScreen(
 ) {
     val currentUser by authRepository.currentUser.collectAsState()
     val messageRepository = remember { MessageRepository() }
+    val firestore = Firebase.firestore
     val coroutineScope = rememberCoroutineScope()
 
     var chats by remember { mutableStateOf<List<Chat>>(emptyList()) }
@@ -44,69 +49,69 @@ fun MessagesScreen(
     var messageText by remember { mutableStateOf("") }
     var isInChatMode by remember { mutableStateOf(false) }
     var currentChatId by remember { mutableStateOf<String?>(null) }
+    var currentSellerId by remember { mutableStateOf<String?>(null) }
+    var currentListingId by remember { mutableStateOf<String?>(null) }
+    var isSending by remember { mutableStateOf(false) }
 
-    // Load chats when screen opens
+    val listState = rememberLazyListState()
+
+    // Load chats
     LaunchedEffect(currentUser) {
         if (currentUser != null) {
             messageRepository.getUserChats(currentUser!!.id).collectLatest { chatList ->
                 chats = chatList
-                println("✅ Loaded ${chats.size} chats for user")
                 isLoading = false
             }
         }
     }
 
-    // Handle direct chat opening from listing
+    // Handle direct chat opening
     LaunchedEffect(listingId, sellerId, currentUser) {
         if (listingId != null && sellerId != null && currentUser != null) {
             isInChatMode = true
+            currentListingId = listingId
+            currentSellerId = sellerId
             currentChatId = generateChatId(currentUser!!.id, sellerId, listingId)
 
-            println("🔄 Opening direct chat: $currentChatId")
-
-            // Load messages for this chat
             messageRepository.getMessages(currentChatId!!).collectLatest { messageList ->
                 messages = messageList
-                println("✅ Loaded ${messages.size} messages for direct chat")
                 isLoading = false
+
+                if (messageList.isNotEmpty()) {
+                    listState.animateScrollToItem(messageList.size - 1)
+                }
             }
 
-            // Mark messages as read when opening chat
-            coroutineScope.launch {
-                messageRepository.markMessagesAsRead(currentChatId!!, currentUser!!.id)
-            }
+            messageRepository.markMessagesAsRead(currentChatId!!, currentUser!!.id)
         }
     }
 
-    // Handle chat selection with real-time updates
+    // Handle chat selection
     LaunchedEffect(currentChatId) {
         if (currentChatId != null && currentUser != null) {
-            println("🔄 Setting up real-time messages for chat: $currentChatId")
-
             messageRepository.getMessages(currentChatId!!).collectLatest { messageList ->
                 messages = messageList
-                println("✅ Real-time update: ${messages.size} messages in chat")
+
+                if (messageList.isNotEmpty()) {
+                    listState.animateScrollToItem(messageList.size - 1)
+                }
             }
 
-            // Mark messages as read when opening chat
-            coroutineScope.launch {
-                messageRepository.markMessagesAsRead(currentChatId!!, currentUser!!.id)
-            }
+            messageRepository.markMessagesAsRead(currentChatId!!, currentUser!!.id)
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(if (isInChatMode) "Chat" else "Messages")
-                },
+                title = { Text(if (isInChatMode) "Chat" else "Messages") },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (isInChatMode) {
                             isInChatMode = false
                             currentChatId = null
-                            // Reload chats when going back
+                            currentSellerId = null
+                            currentListingId = null
                             if (currentUser != null) {
                                 coroutineScope.launch {
                                     messageRepository.getUserChats(currentUser!!.id).collectLatest { chatList ->
@@ -137,16 +142,13 @@ fun MessagesScreen(
         ) {
             when {
                 isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = Color(0xFF013B33))
-                    }
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Color(0xFF013B33)
+                    )
                 }
 
                 isInChatMode -> {
-                    // Chat View
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Messages List
                         if (messages.isEmpty()) {
@@ -175,28 +177,22 @@ fun MessagesScreen(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = Color.Gray
                                     )
-                                    // Debug info
-                                    Text(
-                                        text = "Chat ID: ${currentChatId?.take(20)}...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.Gray
-                                    )
                                 }
                             }
                         } else {
                             LazyColumn(
+                                state = listState,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxWidth()
                                     .padding(16.dp),
-                                reverseLayout = true
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(messages.reversed()) { message ->
+                                items(messages) { message ->
                                     ChatMessageBubble(
                                         message = message,
                                         isCurrentUser = message.senderId == currentUser?.id
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
                             }
                         }
@@ -204,6 +200,7 @@ fun MessagesScreen(
                         // Message Input
                         Surface(
                             tonalElevation = 8.dp,
+                            shadowElevation = 8.dp,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -218,63 +215,91 @@ fun MessagesScreen(
                                     placeholder = { Text("Type a message...") },
                                     modifier = Modifier.weight(1f),
                                     maxLines = 3,
+                                    enabled = !isSending,
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = Color(0xFF013B33),
                                         unfocusedBorderColor = Color.Gray
                                     )
                                 )
+
                                 Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(
+
+                                // SEND BUTTON - Direct Firestore Write
+                                Button(
                                     onClick = {
                                         if (messageText.isNotBlank() && currentUser != null && currentChatId != null) {
                                             coroutineScope.launch {
+                                                isSending = true
                                                 try {
-                                                    // Extract participant IDs from chat ID
+                                                    // Extract IDs from chatId
                                                     val parts = currentChatId!!.split("_")
-                                                    val otherParticipant = if (parts[0] == currentUser!!.id) parts[1] else parts[0]
-                                                    val listingIdFromChat = parts[2]
+                                                    val receiver = if (parts[0] == currentUser!!.id) parts[1] else parts[0]
+                                                    val listing = parts[2]
 
-                                                    val message = Message(
-                                                        id = UUID.randomUUID().toString(),
-                                                        listingId = listingIdFromChat,
-                                                        senderId = currentUser!!.id,
-                                                        receiverId = otherParticipant,
-                                                        content = messageText,
-                                                        isRead = false,
-                                                        createdAt = Timestamp.now(),
-                                                        chatId = currentChatId!! // ✅ Add chatId here
-                                                    )
+                                                    val msgId = UUID.randomUUID().toString()
 
-                                                    println("📤 MessagesScreen: Sending message:")
-                                                    println("   Chat ID: ${message.chatId}")
-                                                    println("   From: ${message.senderId} → To: ${message.receiverId}")
-                                                    println("   Content: ${message.content}")
+                                                    // Direct write to Firestore
+                                                    firestore.collection("messages")
+                                                        .document(msgId)
+                                                        .set(mapOf(
+                                                            "id" to msgId,
+                                                            "listing_id" to listing,
+                                                            "sender_id" to currentUser!!.id,
+                                                            "receiver_id" to receiver,
+                                                            "content" to messageText.trim(),
+                                                            "is_read" to false,
+                                                            "created_at" to Timestamp.now(),
+                                                            "chat_id" to currentChatId!!
+                                                        ))
+                                                        .await()
 
-                                                    val success = messageRepository.sendMessage(message)
-                                                    if (success) {
-                                                        messageText = ""
-                                                        println("✅ MessagesScreen: Message sent successfully!")
-                                                    } else {
-                                                        println("❌ MessagesScreen: Failed to send message")
-                                                    }
+                                                    // Update chat
+                                                    firestore.collection("chats")
+                                                        .document(currentChatId!!)
+                                                        .set(mapOf(
+                                                            "id" to currentChatId!!,
+                                                            "participant1" to parts[0],
+                                                            "participant2" to parts[1],
+                                                            "listing_id" to listing,
+                                                            "last_message" to messageText.trim(),
+                                                            "last_message_time" to Timestamp.now(),
+                                                            "unread_count" to 0,
+                                                            "participants" to listOf(parts[0], parts[1])
+                                                        ))
+                                                        .await()
+
+                                                    messageText = ""
+                                                    println("✅ Message sent successfully!")
                                                 } catch (e: Exception) {
-                                                    println("❌ MessagesScreen: Error sending message: ${e.message}")
+                                                    println("❌ Error sending message: ${e.message}")
                                                     e.printStackTrace()
+                                                } finally {
+                                                    isSending = false
                                                 }
                                             }
                                         }
                                     },
-                                    enabled = messageText.isNotBlank() && currentChatId != null,
-                                    colors = IconButtonDefaults.iconButtonColors(
+                                    enabled = messageText.isNotBlank() && !isSending,
+                                    modifier = Modifier.size(56.dp),
+                                    colors = ButtonDefaults.buttonColors(
                                         containerColor = Color(0xFF013B33),
                                         disabledContainerColor = Color.Gray
-                                    )
+                                    ),
+                                    contentPadding = PaddingValues(0.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Default.Send,
-                                        contentDescription = "Send",
-                                        tint = Color.White
-                                    )
+                                    if (isSending) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            color = Color.White,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Send,
+                                            contentDescription = "Send",
+                                            tint = Color.White
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -282,30 +307,29 @@ fun MessagesScreen(
                 }
 
                 chats.isEmpty() -> {
-                    Box(
+                    Column(
                         modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.Chat,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = Color.Gray
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "No messages yet",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = Color.Gray
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Chat with sellers and buyers here",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.Gray
-                            )
-                        }
+                        Icon(
+                            Icons.Default.Chat,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No messages yet",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Chat with sellers and buyers here",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Gray
+                        )
                     }
                 }
 
@@ -320,7 +344,9 @@ fun MessagesScreen(
                                 onClick = {
                                     isInChatMode = true
                                     currentChatId = chat.id
-                                    println("🔄 Opening chat: ${chat.id}")
+                                    val parts = chat.id.split("_")
+                                    currentSellerId = if (parts[0] == currentUser?.id) parts[1] else parts[0]
+                                    currentListingId = parts[2]
                                 }
                             )
                         }
@@ -331,7 +357,6 @@ fun MessagesScreen(
     }
 }
 
-// CHANGED: Renamed to avoid conflict with ChatScreen's MessageBubble
 @Composable
 fun ChatMessageBubble(message: Message, isCurrentUser: Boolean) {
     Row(
@@ -346,7 +371,7 @@ fun ChatMessageBubble(message: Message, isCurrentUser: Boolean) {
                 bottomStart = if (isCurrentUser) 16.dp else 4.dp,
                 bottomEnd = if (isCurrentUser) 4.dp else 16.dp
             ),
-            shadowElevation = if (isCurrentUser) 2.dp else 1.dp,
+            shadowElevation = 2.dp,
             modifier = Modifier.widthIn(max = 280.dp)
         ) {
             Column(
@@ -407,7 +432,7 @@ fun ChatItem(chat: Chat, currentUserId: String, onClick: () -> Unit) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "User ${otherParticipant.takeLast(6)}", // Show last 6 chars for better identification
+                    text = "User ${otherParticipant.takeLast(6)}",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFF013B33)
@@ -447,7 +472,6 @@ fun ChatItem(chat: Chat, currentUserId: String, onClick: () -> Unit) {
     }
 }
 
-// Helper function to generate chat ID (same as in repository)
 private fun generateChatId(user1: String, user2: String, listingId: String): String {
     val participants = listOf(user1, user2).sorted()
     return "${participants[0]}_${participants[1]}_$listingId"

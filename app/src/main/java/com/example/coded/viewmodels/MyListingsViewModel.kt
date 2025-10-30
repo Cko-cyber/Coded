@@ -5,14 +5,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coded.data.Listing
 import com.example.coded.data.ListingRepository
-import kotlinx.coroutines.delay
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class MyListingsViewModel : ViewModel() {
     private val TAG = "MyListingsVM"
     private val listingRepository = ListingRepository()
+    private val firestore = FirebaseFirestore.getInstance()
+
+    private var listenerRegistration: ListenerRegistration? = null
 
     private val _listings = MutableStateFlow<List<Listing>>(emptyList())
     val listings: StateFlow<List<Listing>> = _listings
@@ -23,77 +29,66 @@ class MyListingsViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
-    // ✅ Auto-refresh every 10 seconds when viewing screen
-    private var isAutoRefreshActive = false
-
     init {
         Log.d(TAG, "✅ MyListingsViewModel initialized")
     }
 
-    fun startAutoRefresh(userId: String) {
-        if (isAutoRefreshActive) return
-        isAutoRefreshActive = true
-
-        viewModelScope.launch {
-            while (isAutoRefreshActive) {
-                Log.d(TAG, "🔄 Auto-refreshing listings...")
-                loadUserListings(userId)
-                delay(10000) // Refresh every 10 seconds
-            }
-        }
-    }
-
-    fun stopAutoRefresh() {
-        isAutoRefreshActive = false
-        Log.d(TAG, "⏸️ Auto-refresh stopped")
-    }
-
+    // Real-time listener for user's listings
     fun loadUserListings(userId: String) {
-        Log.d(TAG, "📥 Loading listings for user: $userId")
+        Log.d(TAG, "📥 Setting up real-time listener for user: $userId")
         _isLoading.value = true
         _error.value = null
 
-        viewModelScope.launch {
-            try {
-                val userListings = listingRepository.getListingsByUserId(userId)
-                Log.d(TAG, "✅ Loaded ${userListings.size} listings")
+        // Remove any existing listener
+        listenerRegistration?.remove()
 
-                // Debug log each listing
-                userListings.forEachIndexed { index, listing ->
-                    Log.d(TAG, "   [$index] ${listing.breed} - ${listing.listingTier} - Active: ${listing.is_active}")
+        // Set up new real-time listener
+        listenerRegistration = firestore.collection("listings")
+            .whereEqualTo("user_id", userId)
+            .orderBy("created_at", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                _isLoading.value = false
+
+                if (error != null) {
+                    Log.e(TAG, "❌ Listener error: ${error.message}")
+                    _error.value = "Failed to load listings: ${error.message}"
+                    return@addSnapshotListener
                 }
 
-                _listings.value = userListings
-                _error.value = null
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Error loading listings: ${e.message}", e)
-                _error.value = "Failed to load your listings: ${e.message}"
-                _listings.value = emptyList()
-            } finally {
-                _isLoading.value = false
+                if (snapshot != null) {
+                    val userListings = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            val listing = doc.toObject(Listing::class.java)?.copy(id = doc.id)
+                            Log.d(TAG, "📄 Loaded listing: ${listing?.breed} - Active: ${listing?.is_active} - ID: ${listing?.id}")
+                            listing
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ Error parsing listing ${doc.id}: ${e.message}")
+                            null
+                        }
+                    }
+
+                    Log.d(TAG, "✅ Real-time update: ${userListings.size} listings")
+                    _listings.value = userListings
+                    _error.value = null
+                } else {
+                    Log.d(TAG, "📭 No listings found or snapshot is null")
+                    _listings.value = emptyList()
+                    _error.value = null
+                }
             }
-        }
     }
 
     suspend fun toggleListingActive(listingId: String, isActive: Boolean): Boolean {
         Log.d(TAG, "🔄 Toggling listing $listingId to active=$isActive")
         return try {
-            val success = listingRepository.toggleListingActive(listingId, isActive)
-            if (success) {
-                // ✅ Immediately update local state
-                _listings.value = _listings.value.map { listing ->
-                    if (listing.id == listingId) {
-                        Log.d(TAG, "✅ Updated listing ${listing.breed} to active=$isActive")
-                        listing.copy(is_active = isActive)
-                    } else {
-                        listing
-                    }
-                }
-                Log.d(TAG, "✅ Listing toggled successfully")
-            } else {
-                Log.e(TAG, "❌ Repository returned false")
-            }
-            success
+            // Update in Firestore
+            firestore.collection("listings")
+                .document(listingId)
+                .update("is_active", isActive)
+                .await()
+
+            Log.d(TAG, "✅ Listing toggled successfully in Firestore")
+            true
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error toggling listing: ${e.message}", e)
             _error.value = "Failed to update listing: ${e.message}"
@@ -104,16 +99,14 @@ class MyListingsViewModel : ViewModel() {
     suspend fun deleteListing(listingId: String): Boolean {
         Log.d(TAG, "🗑️ Deleting listing: $listingId")
         return try {
-            val success = listingRepository.deleteListing(listingId)
-            if (success) {
-                // ✅ Immediately remove from local state
-                val deletedListing = _listings.value.find { it.id == listingId }
-                _listings.value = _listings.value.filter { it.id != listingId }
-                Log.d(TAG, "✅ Deleted listing: ${deletedListing?.breed}")
-            } else {
-                Log.e(TAG, "❌ Repository returned false")
-            }
-            success
+            // Delete from Firestore
+            firestore.collection("listings")
+                .document(listingId)
+                .delete()
+                .await()
+
+            Log.d(TAG, "✅ Deleted listing: $listingId")
+            true
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error deleting listing: ${e.message}", e)
             _error.value = "Failed to delete listing: ${e.message}"
@@ -126,9 +119,10 @@ class MyListingsViewModel : ViewModel() {
         loadUserListings(userId)
     }
 
+    // Stop the listener when ViewModel is cleared
     override fun onCleared() {
         super.onCleared()
-        stopAutoRefresh()
-        Log.d(TAG, "🧹 ViewModel cleared")
+        listenerRegistration?.remove()
+        Log.d(TAG, "🧹 ViewModel cleared, listener removed")
     }
 }

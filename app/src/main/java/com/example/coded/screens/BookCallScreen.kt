@@ -314,16 +314,22 @@ fun BookCallScreen(
                                 .set(booking)
                                 .await()
 
-                            // Send notification to seller
+                            // ✅ UPDATED: Send detailed notification to seller
                             val notification = mapOf(
                                 "id" to UUID.randomUUID().toString(),
                                 "userId" to sellerId,
                                 "type" to "call_booking",
-                                "title" to "New Call Request",
-                                "message" to "Someone wants to schedule a call about your listing",
+                                "title" to "New Call Request from ${currentUser?.full_name ?: "User"}",
+                                "message" to "Date: $selectedDate, Time: $selectedTime. ${if (message.isNotEmpty()) "Message: ${message.take(100)}" else "No additional message"}",
                                 "listingId" to listingId,
                                 "isRead" to false,
-                                "createdAt" to Timestamp.now()
+                                "createdAt" to Timestamp.now(),
+                                // ✅ ADDED: Detailed booking information
+                                "preferredDate" to selectedDate,
+                                "preferredTime" to selectedTime,
+                                "additionalMessage" to message,
+                                "buyerId" to currentUser?.id,
+                                "buyerName" to currentUser?.full_name
                             )
 
                             firestore.collection("notifications")

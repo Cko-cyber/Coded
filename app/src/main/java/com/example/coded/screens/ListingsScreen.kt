@@ -264,10 +264,10 @@ fun ListingsScreen(
 
                     else -> {
                         // OPTION 1: Using VerticalPager for SNAP SCROLLING (Full tiles only)
-                        SnapScrollListings(filteredListings, navController)
+                        SnapScrollListings(filteredListings, navController, authRepository)
 
                         // OPTION 2: Using LazyColumn with enhanced UX (uncomment to use instead)
-                        // EnhancedLazyColumnListings(filteredListings, navController)
+                        // EnhancedLazyColumnListings(filteredListings, navController, authRepository)
                     }
                 }
             }
@@ -278,7 +278,11 @@ fun ListingsScreen(
 // OPTION 1: VerticalPager with SNAP SCROLLING - Always shows full tiles
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SnapScrollListings(listings: List<Listing>, navController: NavController) {
+fun SnapScrollListings(
+    listings: List<Listing>,
+    navController: NavController,
+    authRepository: AuthRepository
+) {
     val pagerState = rememberPagerState(
         initialPage = 0,
         pageCount = { listings.size }
@@ -312,6 +316,8 @@ fun SnapScrollListings(listings: List<Listing>, navController: NavController) {
                 onClick = {
                     navController.navigate("${Screen.SingleStock.route}/${listing.id}")
                 },
+                navController = navController,
+                authRepository = authRepository,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -398,7 +404,11 @@ fun SnapScrollListings(listings: List<Listing>, navController: NavController) {
 
 // OPTION 2: LazyColumn with enhanced UX (alternative)
 @Composable
-fun EnhancedLazyColumnListings(listings: List<Listing>, navController: NavController) {
+fun EnhancedLazyColumnListings(
+    listings: List<Listing>,
+    navController: NavController,
+    authRepository: AuthRepository
+) {
     val listState = rememberLazyListState()
     var showScrollHint by remember { mutableStateOf(true) }
 
@@ -429,7 +439,9 @@ fun EnhancedLazyColumnListings(listings: List<Listing>, navController: NavContro
                     listing = listing,
                     onClick = {
                         navController.navigate("${Screen.SingleStock.route}/${listing.id}")
-                    }
+                    },
+                    navController = navController,
+                    authRepository = authRepository
                 )
             }
         }
@@ -503,8 +515,13 @@ fun EnhancedLazyColumnListings(listings: List<Listing>, navController: NavContro
 fun EnhancedListingCard(
     listing: Listing,
     onClick: () -> Unit,
+    navController: NavController,
+    authRepository: AuthRepository,
     modifier: Modifier = Modifier
 ) {
+    val currentUser by authRepository.currentUser.collectAsState()
+    val isOwnListing = listing.user_id == currentUser?.id
+
     Card(
         onClick = onClick,
         modifier = modifier,
@@ -512,7 +529,7 @@ fun EnhancedListingCard(
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column {
-            // Image section with multiple image indicator
+            // Image section with multiple image indicator AND EDIT BUTTON
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -549,30 +566,70 @@ fun EnhancedListingCard(
                     }
                 }
 
-                // Multiple images indicator (if more than 1 image)
-                if (listing.image_urls.size > 1) {
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.7f),
-                        shape = RoundedCornerShape(bottomStart = 8.dp),
-                        modifier = Modifier.align(Alignment.TopEnd)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                // Top-right corner: Multiple images indicator AND Edit button for own listings
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    // Multiple images indicator (if more than 1 image)
+                    if (listing.image_urls.size > 1) {
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(6.dp)
                         ) {
-                            Icon(
-                                Icons.Default.PhotoLibrary,
-                                contentDescription = "Multiple images",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "${listing.image_urls.size}",
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.PhotoLibrary,
+                                    contentDescription = "Multiple images",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${listing.image_urls.size}",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+
+                    // Edit button (only show for user's own listings)
+                    if (isOwnListing) {
+                        Surface(
+                            color = Color(0xFF013B33).copy(alpha = 0.9f),
+                            shape = RoundedCornerShape(6.dp),
+                            onClick = {
+                                // Navigate to edit listing screen
+                                if (listing.id != null) {
+                                    navController.navigate("edit_listing/${listing.id}")
+                                }
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "Edit Listing",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Edit",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

@@ -56,6 +56,15 @@ fun NavGraph(
             SingleStockScreen(navController, listingId, authRepository)
         }
 
+        // ADD EDIT LISTING ROUTE HERE
+        composable(
+            route = "edit_listing/{listingId}",
+            arguments = listOf(navArgument("listingId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
+            EditListingScreen(navController, listingId)
+        }
+
         // Chat Screen - FIXED ROUTE
         composable(
             route = "chat/{listingId}/{sellerId}",

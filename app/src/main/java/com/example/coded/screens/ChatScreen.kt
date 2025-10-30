@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coded.data.AuthRepository
 import com.example.coded.data.Message
+import com.example.coded.data.MessageRepository
+import com.example.coded.data.MessageStatus
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -36,28 +38,38 @@ fun ChatScreen(
 ) {
     val currentUser by authRepository.currentUser.collectAsState()
     val firestore = FirebaseFirestore.getInstance()
-    val messageRepository = remember { com.example.coded.data.MessageRepository() }
+    val messageRepository = remember { MessageRepository() }
 
     var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
     var messageText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
+    var isSending by remember { mutableStateOf(false) }
+    var sellerName by remember { mutableStateOf("Seller") }
     var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
 
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Generate chat ID - USE THE SAME FUNCTION AS MESSAGE REPOSITORY
+    // Generate chat ID
     val chatId = remember(currentUser?.id, sellerId, listingId) {
         generateChatId(currentUser?.id ?: "", sellerId, listingId)
     }
 
-    // ✅ FIXED: Real-time message listener using chat_id
-    LaunchedEffect(chatId) {
+    // Load seller's real name
+    LaunchedEffect(sellerId) {
+        val user = messageRepository.getUserById(sellerId)
+        sellerName = user?.full_name ?: "User ${sellerId.takeLast(6)}"
+    }
+
+    // Real-time message listener
+    LaunchedEffect(chatId, currentUser) {
         if (currentUser != null) {
             println("🔄 ChatScreen: Setting up listener for chat: $chatId")
 
+            listenerRegistration?.remove()
+
             listenerRegistration = firestore.collection("messages")
-                .whereEqualTo("chat_id", chatId) // ✅ Use chat_id instead of listingId
+                .whereEqualTo("chat_id", chatId)
                 .orderBy("created_at", Query.Direction.ASCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -67,24 +79,25 @@ fun ChatScreen(
                     }
 
                     if (snapshot != null) {
-                        messages = snapshot.documents.mapNotNull { doc ->
+                        val newMessages = snapshot.documents.mapNotNull { doc ->
                             try {
                                 Message(
                                     id = doc.id,
-                                    listingId = doc.getString("listing_id") ?: "", // ✅ Consistent field names
+                                    listingId = doc.getString("listing_id") ?: "",
                                     senderId = doc.getString("sender_id") ?: "",
                                     receiverId = doc.getString("receiver_id") ?: "",
                                     content = doc.getString("content") ?: "",
                                     isRead = doc.getBoolean("is_read") ?: false,
+                                    status = MessageStatus.valueOf(doc.getString("status") ?: "SENT"),
                                     createdAt = doc.getTimestamp("created_at") ?: Timestamp.now(),
                                     chatId = doc.getString("chat_id") ?: ""
                                 )
                             } catch (e: Exception) {
-                                println("❌ ChatScreen message parsing error: ${e.message}")
                                 null
                             }
                         }
 
+                        messages = newMessages
                         println("✅ ChatScreen: Loaded ${messages.size} messages for chat: $chatId")
                         isLoading = false
 
@@ -94,12 +107,26 @@ fun ChatScreen(
                                 listState.animateScrollToItem(messages.size - 1)
                             }
                         }
+
+                        // Update message statuses
+                        coroutineScope.launch {
+                            // Mark messages as delivered
+                            messages.forEach { message ->
+                                if (message.receiverId == currentUser!!.id &&
+                                    message.status == MessageStatus.SENT) {
+                                    messageRepository.updateMessageToDelivered(message.id)
+                                }
+                            }
+
+                            // Mark messages as read
+                            messageRepository.markMessagesAsRead(chatId, currentUser!!.id)
+                        }
                     }
                 }
         }
     }
 
-    // Cleanup listener
+    // Cleanup
     DisposableEffect(Unit) {
         onDispose {
             listenerRegistration?.remove()
@@ -109,7 +136,16 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Chat with Seller") },
+                title = {
+                    Column {
+                        Text(sellerName, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = "Online", // Simple online status
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, "Back")
@@ -130,69 +166,40 @@ fun ChatScreen(
             )
         },
         bottomBar = {
-            Surface(
-                tonalElevation = 8.dp,
-                shadowElevation = 8.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = messageText,
-                        onValueChange = { messageText = it },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Type a message...") },
-                        maxLines = 3
-                    )
+            MessageInputSection(
+                messageText = messageText,
+                onMessageTextChange = { messageText = it },
+                onSendMessage = {
+                    if (messageText.isNotBlank() && currentUser != null && !isSending) {
+                        isSending = true
+                        coroutineScope.launch {
+                            val message = Message(
+                                id = UUID.randomUUID().toString(),
+                                listingId = listingId,
+                                senderId = currentUser!!.id,
+                                receiverId = sellerId,
+                                content = messageText.trim(),
+                                isRead = false,
+                                status = MessageStatus.SENT,
+                                createdAt = Timestamp.now(),
+                                chatId = chatId
+                            )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                            println("📤 ChatScreen: Sending message to chat: $chatId")
 
-                    IconButton(
-                        onClick = {
-                            if (messageText.isNotBlank() && currentUser != null) {
-                                coroutineScope.launch {
-                                    // ✅ Use MessageRepository to ensure consistency
-                                    val message = Message(
-                                        id = UUID.randomUUID().toString(),
-                                        listingId = listingId,
-                                        senderId = currentUser?.id ?: "",
-                                        receiverId = sellerId,
-                                        content = messageText.trim(),
-                                        isRead = false,
-                                        createdAt = Timestamp.now(),
-                                        chatId = chatId // ✅ Include chatId
-                                    )
-
-                                    println("📤 ChatScreen: Sending message:")
-                                    println("   Chat ID: $chatId")
-                                    println("   From: ${message.senderId} → To: ${message.receiverId}")
-
-                                    val success = messageRepository.sendMessage(message)
-                                    if (success) {
-                                        messageText = ""
-                                        println("✅ ChatScreen: Message sent successfully via repository!")
-                                    } else {
-                                        println("❌ ChatScreen: Failed to send message via repository")
-                                    }
-                                }
+                            val success = messageRepository.sendMessage(message)
+                            if (success) {
+                                messageText = ""
+                                println("✅ ChatScreen: Message sent and input cleared!")
+                            } else {
+                                println("❌ ChatScreen: Failed to send message")
                             }
-                        },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(Color(0xFF013B33), RoundedCornerShape(24.dp)),
-                        enabled = messageText.isNotBlank()
-                    ) {
-                        Icon(
-                            Icons.Default.Send,
-                            "Send",
-                            tint = Color.White
-                        )
+                            isSending = false
+                        }
                     }
-                }
-            }
+                },
+                isSending = isSending
+            )
         }
     ) { padding ->
         Box(
@@ -207,52 +214,69 @@ fun ChatScreen(
                     color = Color(0xFF013B33)
                 )
             } else if (messages.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Default.Chat,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "No messages yet",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Start the conversation!",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
-                    // Debug info
-                    Text(
-                        text = "Chat ID: ${chatId.take(20)}...",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
-                }
+                EmptyChatState(sellerName = sellerName)
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(messages) { message ->
-                        MessageBubble(
-                            message = message,
-                            isCurrentUser = message.senderId == currentUser?.id
-                        )
-                    }
+                MessagesList(
+                    messages = messages,
+                    currentUserId = currentUser?.id ?: "",
+                    listState = listState
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MessageInputSection(
+    messageText: String,
+    onMessageTextChange: (String) -> Unit,
+    onSendMessage: () -> Unit,
+    isSending: Boolean
+) {
+    Surface(
+        tonalElevation = 8.dp,
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = messageText,
+                onValueChange = onMessageTextChange,
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Type a message...") },
+                maxLines = 3,
+                enabled = !isSending,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF013B33),
+                    unfocusedBorderColor = Color.Gray
+                )
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = onSendMessage,
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(Color(0xFF013B33), RoundedCornerShape(24.dp)),
+                enabled = messageText.isNotBlank() && !isSending
+            ) {
+                if (isSending) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Send,
+                        "Send",
+                        tint = Color.White
+                    )
                 }
             }
         }
@@ -260,7 +284,59 @@ fun ChatScreen(
 }
 
 @Composable
-fun MessageBubble(message: Message, isCurrentUser: Boolean) {
+fun EmptyChatState(sellerName: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.Chat,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = Color.Gray
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "No messages with $sellerName yet",
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.Gray
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Start the conversation!",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Gray
+        )
+    }
+}
+
+@Composable
+fun MessagesList(
+    messages: List<Message>,
+    currentUserId: String,
+    listState: androidx.compose.foundation.lazy.LazyListState
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(messages) { message ->
+            EnhancedMessageBubble(
+                message = message,
+                isCurrentUser = message.senderId == currentUserId
+            )
+        }
+    }
+}
+
+@Composable
+fun EnhancedMessageBubble(message: Message, isCurrentUser: Boolean) {
     val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     Row(
@@ -290,17 +366,38 @@ fun MessageBubble(message: Message, isCurrentUser: Boolean) {
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                Text(
-                    text = dateFormat.format(message.createdAt.toDate()),
-                    color = if (isCurrentUser) Color.White.copy(alpha = 0.7f) else Color.Gray,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // WhatsApp-like status indicators
+                    if (isCurrentUser) {
+                        val (icon, color) = when (message.status) {
+                            MessageStatus.SENT -> Pair(Icons.Default.Done, Color.White.copy(alpha = 0.7f))
+                            MessageStatus.DELIVERED -> Pair(Icons.Default.DoneAll, Color.White.copy(alpha = 0.7f))
+                            MessageStatus.READ -> Pair(Icons.Default.DoneAll, Color(0xFF4CAF50))
+                        }
+
+                        Icon(
+                            icon,
+                            contentDescription = "Message status",
+                            modifier = Modifier.size(12.dp),
+                            tint = color
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+
+                    Text(
+                        text = dateFormat.format(message.createdAt.toDate()),
+                        color = if (isCurrentUser) Color.White.copy(alpha = 0.7f) else Color.Gray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
 }
 
-// ✅ Use the SAME function as MessageRepository
 private fun generateChatId(user1: String, user2: String, listingId: String): String {
     val participants = listOf(user1, user2).sorted()
     return "${participants[0]}_${participants[1]}_$listingId"

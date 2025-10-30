@@ -358,16 +358,23 @@ fun ScheduleViewingScreen(
                                 .set(booking)
                                 .await()
 
-                            // Send notification to seller
+                            // ✅ UPDATED: Send detailed notification to seller
                             val notification = mapOf(
                                 "id" to UUID.randomUUID().toString(),
                                 "userId" to sellerId,
                                 "type" to "viewing_booking",
-                                "title" to "New Viewing Request",
-                                "message" to "Someone wants to schedule a viewing of your livestock",
+                                "title" to "New Viewing Request from ${currentUser?.full_name ?: "User"}",
+                                "message" to "Date: $selectedDate, Time: $selectedTime, People: $numberOfPeople. ${if (message.isNotEmpty()) "Message: ${message.take(100)}" else "No additional message"}",
                                 "listingId" to listingId,
                                 "isRead" to false,
-                                "createdAt" to Timestamp.now()
+                                "createdAt" to Timestamp.now(),
+                                // ✅ ADDED: Detailed booking information
+                                "preferredDate" to selectedDate,
+                                "preferredTime" to selectedTime,
+                                "numberOfPeople" to numberOfPeople,
+                                "additionalMessage" to message,
+                                "buyerId" to currentUser?.id,
+                                "buyerName" to currentUser?.full_name
                             )
 
                             firestore.collection("notifications")

@@ -9,7 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,7 +18,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.coded.data.AuthRepository
 import com.example.coded.data.Listing
-import com.example.coded.screens.MyListingsViewModel
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
@@ -35,6 +33,22 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
     val currentUser by authRepository.currentUser.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
+    // Debug logging for state changes
+    LaunchedEffect(listings) {
+        println("🔄 MyListingsScreen: Listings updated - ${listings.size} items")
+        listings.forEachIndexed { index, listing ->
+            println("   📝 [$index] ${listing.breed} - ID: ${listing.id} - Active: ${listing.is_active}")
+        }
+    }
+
+    LaunchedEffect(isLoading) {
+        println("🔄 MyListingsScreen: Loading state - $isLoading")
+    }
+
+    LaunchedEffect(error) {
+        println("🔄 MyListingsScreen: Error state - $error")
+    }
+
     // Add authentication check
     if (currentUser == null) {
         LaunchedEffect(Unit) {
@@ -45,8 +59,10 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
         return
     }
 
+    // Use real-time listener when user is available
     LaunchedEffect(currentUser) {
         if (currentUser != null) {
+            println("🚀 MyListingsScreen: Loading listings for user: ${currentUser!!.id}")
             myListingsViewModel.loadUserListings(currentUser!!.id)
         }
     }
@@ -66,6 +82,17 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
                     navigationIconContentColor = Color.White
                 )
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    println("➕ Navigating to create listing")
+                    navController.navigate("create_listing")
+                },
+                containerColor = Color(0xFF013B33)
+            ) {
+                Icon(Icons.Default.Add, "Create Listing")
+            }
         }
     ) { padding ->
         Box(
@@ -85,7 +112,11 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = Color(0xFF013B33))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = Color(0xFF013B33))
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("Loading your listings...")
+                            }
                         }
                     }
 
@@ -111,7 +142,7 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
                             Button(
                                 onClick = {
                                     if (currentUser != null) {
-                                        myListingsViewModel.loadUserListings(currentUser!!.id)
+                                        myListingsViewModel.refreshUserListings(currentUser!!.id)
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -144,6 +175,7 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
+                                    println("➕ Navigating to create listing from empty state")
                                     navController.navigate("create_listing")
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -162,21 +194,36 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
                         ) {
                             items(
                                 items = listings,
-                                key = { listing -> listing.id }
+                                key = { listing -> listing.id ?: "" }
                             ) { listing ->
                                 MyListingCard(
                                     listing = listing,
                                     onEdit = {
-                                        navController.navigate("edit_listing/${listing.id}")
+                                        if (listing.id != null) {
+                                            println("✏️ Navigating to edit listing: ${listing.id}")
+                                            navController.navigate("edit_listing/${listing.id}")
+                                        } else {
+                                            println("❌ Cannot edit listing with null ID")
+                                        }
                                     },
                                     onToggleActive = {
                                         coroutineScope.launch {
-                                            myListingsViewModel.toggleListingActive(listing.id, !listing.is_active)
+                                            if (listing.id != null) {
+                                                println("🔄 Toggling listing ${listing.id} active state")
+                                                myListingsViewModel.toggleListingActive(listing.id, !listing.is_active)
+                                            } else {
+                                                println("❌ Cannot toggle listing with null ID")
+                                            }
                                         }
                                     },
                                     onDelete = {
                                         coroutineScope.launch {
-                                            myListingsViewModel.deleteListing(listing.id)
+                                            if (listing.id != null) {
+                                                println("🗑️ Deleting listing: ${listing.id}")
+                                                myListingsViewModel.deleteListing(listing.id)
+                                            } else {
+                                                println("❌ Cannot delete listing with null ID")
+                                            }
                                         }
                                     }
                                 )
@@ -200,7 +247,8 @@ fun MyListingCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(4.dp)
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column {
             Column(
@@ -274,7 +322,10 @@ fun MyListingCard(
             ) {
                 OutlinedButton(
                     onClick = onEdit,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF013B33)
+                    )
                 ) {
                     Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
