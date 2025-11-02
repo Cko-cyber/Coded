@@ -109,4 +109,19 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.5.4")
     debugImplementation("androidx.compose.ui:ui-tooling:1.5.4")
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.5.4")
+
+    // Add desugaring for newer Java features
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+
+    // Performance monitoring
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+
+    // OkHttp for notifications
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Splash Screen API
+    implementation("androidx.core:core-splashscreen:1.0.1")
+// Make sure you have these core dependencies
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
 }

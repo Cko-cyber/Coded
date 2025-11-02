@@ -39,8 +39,14 @@ class NotificationManager(private val context: Context) {
                 .await()
             Log.d(TAG, "FCM token saved for user: $userId")
         } catch (e: Exception) {
+            // If update fails, try set with merge
+            val userData = hashMapOf(
+                "fcm_token" to token
+            )
             firestore.collection("users").document(userId)
-                .set(mapOf("fcm_token" to token))
+                .set(userData)
+                .await()
+            Log.d(TAG, "FCM token saved via set for user: $userId")
         }
     }
 
@@ -49,7 +55,9 @@ class NotificationManager(private val context: Context) {
             try {
                 firestore.collection("users").document(userId)
                     .update("fcm_token", null)
+                    .await()
                 FirebaseMessaging.getInstance().unsubscribeFromTopic("all_users")
+                Log.d(TAG, "FCM token cleaned up for user: $userId")
             } catch (e: Exception) {
                 Log.e(TAG, "Error cleaning up FCM", e)
             }

@@ -34,7 +34,11 @@ data class User(
     val updated_at: Timestamp = Timestamp.now(),
 
     @PropertyName("last_active")
-    val last_active: Timestamp = Timestamp.now()
+    val last_active: Timestamp = Timestamp.now(),
+
+    // ADD FCM TOKEN FIELD
+    @PropertyName("fcm_token")
+    val fcm_token: String = ""
 ) {
     // Helper method to convert to Map for Firestore
     fun toMap(): Map<String, Any> {
@@ -50,7 +54,8 @@ data class User(
             "free_listings_reset_date" to free_listings_reset_date,
             "created_at" to created_at,
             "updated_at" to updated_at,
-            "last_active" to last_active
+            "last_active" to last_active,
+            "fcm_token" to fcm_token  // ADD THIS
         )
     }
 
