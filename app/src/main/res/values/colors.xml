@@ -7,6 +7,15 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <!-- ✅ Add this for notification color -->
+
+    <!-- ✅ Herdmat Colors -->
+    <color name="HerdmatGreen">#FF013B33</color>
+    <color name="HerdmatGold">#FFD4AF37</color>
+    <color name="HerdmatTeal">#FF00A896</color>
+    <color name="HerdmatWhite">#FFFFFFFF</color>
+    <color name="HerdmatGrayLight">#FFF5F5F5</color>
+    <color name="HerdmatGrayDark">#FF2E2E2E</color>
+
+    <!-- ✅ Keep existing for backward compatibility -->
     <color name="notification_color">#FF013B33</color>
 </resources>
