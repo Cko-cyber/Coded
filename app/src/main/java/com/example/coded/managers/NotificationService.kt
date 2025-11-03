@@ -8,14 +8,14 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.io.IOException
 
 class NotificationService {
     private val TAG = "NotificationService"
     private val client = OkHttpClient()
 
-    // ⚠️ REPLACE WITH YOUR ACTUAL SUPABASE PROJECT URL
-    private val BASE_URL = "https://vxetgoaowehxxifdbdmm.supabase.co/functions/v1/sendNotification"
+    // ✅ Your Supabase credentials
+    private val SUPABASE_URL = "https://vxetgoaowehxxifdbdmm.supabase.co"
+    private val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4ZXRnb2Fvd2VoeHhpZmRiZG1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5MjE4MzYsImV4cCI6MjA3NjQ5NzgzNn0.n7V7iNzNkMjzb2aNq_Z2ANoC7EhmdQcFB4H3tRBnNVM"
 
     suspend fun sendNotification(
         recipientId: String,
@@ -24,6 +24,11 @@ class NotificationService {
         data: Map<String, String> = emptyMap()
     ): Boolean {
         return try {
+            Log.d(TAG, "📤 Attempting to send notification to: $recipientId")
+            Log.d(TAG, "   Title: $title")
+            Log.d(TAG, "   Body: $body")
+            Log.d(TAG, "   Data: $data")
+
             val json = JSONObject().apply {
                 put("recipient_id", recipientId)
                 put("title", title)
@@ -33,26 +38,40 @@ class NotificationService {
                 }
             }
 
+            Log.d(TAG, "📦 Request JSON: ${json.toString()}")
+
+            // ✅ FIXED: Add authorization headers
             val request = Request.Builder()
-                .url("$BASE_URL/sendNotification")
+                .url("$SUPABASE_URL/functions/v1/sendNotification")
+                .addHeader("Authorization", "Bearer $SUPABASE_ANON_KEY")
+                .addHeader("apikey", SUPABASE_ANON_KEY)
+                .addHeader("Content-Type", "application/json")
                 .post(json.toString().toRequestBody("application/json".toMediaType()))
                 .build()
+
+            Log.d(TAG, "🌐 Sending request to: ${request.url}")
 
             val response = client.newCall(request).execute()
             val responseBody = response.body?.string()
             val isSuccessful = response.isSuccessful
 
             if (isSuccessful) {
-                Log.d(TAG, "✅ Notification sent successfully to: $recipientId - Response: $responseBody")
+                Log.d(TAG, "✅ Notification sent successfully!")
+                Log.d(TAG, "   Response code: ${response.code}")
+                Log.d(TAG, "   Response body: $responseBody")
             } else {
-                Log.e(TAG, "❌ Failed to send notification: ${response.code} - $responseBody")
+                Log.e(TAG, "❌ Failed to send notification")
+                Log.e(TAG, "   Response code: ${response.code}")
+                Log.e(TAG, "   Response body: $responseBody")
             }
 
             response.close()
             isSuccessful
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error sending notification: ${e.message}")
+            Log.e(TAG, "❌ Exception sending notification", e)
+            Log.e(TAG, "   Message: ${e.message}")
+            Log.e(TAG, "   Stack trace: ${e.stackTraceToString()}")
             false
         }
     }
@@ -65,6 +84,8 @@ class NotificationService {
         conversationId: String,
         senderId: String? = null
     ) {
+        Log.d(TAG, "💬 Preparing message notification for $recipientId from $senderName")
+
         CoroutineScope(Dispatchers.IO).launch {
             val data = mutableMapOf(
                 "type" to "new_message",
@@ -74,16 +95,22 @@ class NotificationService {
 
             senderId?.let { data["senderId"] = it }
 
-            sendNotification(
+            val success = sendNotification(
                 recipientId = recipientId,
                 title = "New message from $senderName",
                 body = message,
                 data = data
             )
+
+            if (success) {
+                Log.d(TAG, "✅ Message notification sent successfully")
+            } else {
+                Log.e(TAG, "❌ Message notification failed")
+            }
         }
     }
 
-    // Helper method for call booking notifications
+    // Other helper methods remain the same...
     fun sendCallBookingNotification(
         recipientId: String,
         buyerName: String,
@@ -110,7 +137,6 @@ class NotificationService {
         }
     }
 
-    // Helper method for general notifications
     fun sendGeneralNotification(
         recipientId: String,
         title: String,
@@ -127,7 +153,6 @@ class NotificationService {
         }
     }
 
-    // Helper method for listing interest notifications
     fun sendListingInterestNotification(
         recipientId: String,
         buyerName: String,

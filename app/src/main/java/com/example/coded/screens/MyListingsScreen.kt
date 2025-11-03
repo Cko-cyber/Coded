@@ -18,6 +18,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.coded.data.AuthRepository
 import com.example.coded.data.Listing
+// ✅ FIXED IMPORT: adjust to where your MyListingsViewModel file actually is
+import com.example.coded.screens.MyListingsViewModel
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
@@ -39,14 +41,6 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
         listings.forEachIndexed { index, listing ->
             println("   📝 [$index] ${listing.breed} - ID: ${listing.id} - Active: ${listing.is_active}")
         }
-    }
-
-    LaunchedEffect(isLoading) {
-        println("🔄 MyListingsScreen: Loading state - $isLoading")
-    }
-
-    LaunchedEffect(error) {
-        println("🔄 MyListingsScreen: Error state - $error")
     }
 
     // Add authentication check
@@ -140,10 +134,9 @@ fun MyListingsScreen(navController: NavController, authRepository: AuthRepositor
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
+                                // ✅ FIXED: remove extra argument (function takes none)
                                 onClick = {
-                                    if (currentUser != null) {
-                                        myListingsViewModel.refreshUserListings(currentUser!!.id)
-                                    }
+                                    myListingsViewModel.refreshUserListings()
                                 },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF013B33)
@@ -295,7 +288,6 @@ fun MyListingCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Format Long price with commas
                 Text(
                     text = "E ${NumberFormat.getNumberInstance(Locale.US).format(listing.price)}",
                     style = MaterialTheme.typography.titleSmall,
@@ -305,7 +297,6 @@ fun MyListingCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Use getTierEnum() helper method
                 Text(
                     text = "Tier: ${listing.getTierEnum().displayName}",
                     style = MaterialTheme.typography.bodySmall,
@@ -313,7 +304,6 @@ fun MyListingCard(
                 )
             }
 
-            // Action buttons
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

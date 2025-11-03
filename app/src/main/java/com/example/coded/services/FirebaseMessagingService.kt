@@ -10,7 +10,6 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.coded.MainActivity
-import com.example.coded.R
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -29,34 +28,38 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "🔔 FCM Service Created")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.d(TAG, "🔔 FCM SERVICE CREATED!")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         createNotificationChannel()
     }
 
-    /**
-     * Called when a new FCM token is generated
-     */
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d(TAG, "🔑 New FCM Token: $token")
 
-        // Save token to Firestore
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.d(TAG, "🆕 NEW FCM TOKEN GENERATED!")
+        Log.d(TAG, "   Token length: ${token.length}")
+        Log.d(TAG, "   First 50 chars: ${token.take(50)}...")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
         saveTokenToFirestore(token)
     }
 
-    /**
-     * Called when a message is received
-     * This handles BOTH foreground and background messages when using data-only payload
-     */
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
-        Log.d(TAG, "📨 Message received from: ${remoteMessage.from}")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.d(TAG, "📨 MESSAGE RECEIVED!")
+        Log.d(TAG, "   From: ${remoteMessage.from}")
+        Log.d(TAG, "   Message ID: ${remoteMessage.messageId}")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         // Log notification payload
         remoteMessage.notification?.let { notification ->
-            Log.d(TAG, "📬 Notification Title: ${notification.title}")
-            Log.d(TAG, "📬 Notification Body: ${notification.body}")
+            Log.d(TAG, "📬 Notification:")
+            Log.d(TAG, "   Title: ${notification.title}")
+            Log.d(TAG, "   Body: ${notification.body}")
         }
 
         // Log data payload
@@ -64,14 +67,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             Log.d(TAG, "📦 Data Payload: ${remoteMessage.data}")
         }
 
-        // Handle the message and show notification
+        // Handle the message
         handleMessage(remoteMessage)
     }
 
-    /**
-     * Create notification channel for Android O+
-     * MUST be called before showing any notifications
-     */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val importance = AndroidNotificationManager.IMPORTANCE_HIGH
@@ -94,11 +93,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
-    /**
-     * Handle incoming message and show notification
-     */
     private fun handleMessage(remoteMessage: RemoteMessage) {
-        // Extract title and body from either notification or data payload
         val title = remoteMessage.notification?.title
             ?: remoteMessage.data["title"]
             ?: "Herdmat"
@@ -113,15 +108,14 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val conversationId = remoteMessage.data["conversationId"]
         val senderName = remoteMessage.data["senderName"]
 
-        Log.d(TAG, "🔔 Showing notification: $title - $body - Type: $type")
+        Log.d(TAG, "🔔 Showing notification:")
+        Log.d(TAG, "   Title: $title")
+        Log.d(TAG, "   Body: $body")
+        Log.d(TAG, "   Type: $type")
 
-        // Show the notification
         showNotification(title, body, type, listingId, conversationId, senderName)
     }
 
-    /**
-     * Display the notification
-     */
     private fun showNotification(
         title: String,
         body: String,
@@ -132,11 +126,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     ) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as AndroidNotificationManager
 
-        // Create intent to open the app
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
 
-            // Add extras based on notification type
             when (type) {
                 "new_message" -> {
                     putExtra("open_screen", "messages")
@@ -153,7 +145,6 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             }
         }
 
-        // Create pending intent with FLAG_IMMUTABLE for Android 12+
         val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
@@ -167,12 +158,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             pendingIntentFlags
         )
 
-        // Get default notification sound
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-        // Build notification
+        // ✅ Using android default icon as fallback
         val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification) // Make sure this drawable exists
+            .setSmallIcon(android.R.drawable.ic_dialog_info) // ✅ ANDROID DEFAULT
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -184,43 +174,44 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             .setVibrate(longArrayOf(0, 500, 250, 500))
             .setDefaults(NotificationCompat.DEFAULT_ALL)
 
-        // Show the notification
         val notificationId = System.currentTimeMillis().toInt()
         notificationManager.notify(notificationId, notificationBuilder.build())
 
         Log.d(TAG, "✅ Notification shown with ID: $notificationId")
     }
 
-    /**
-     * Save FCM token to Firestore
-     */
     private fun saveTokenToFirestore(token: String) {
         val userId = FirebaseAuth.getInstance().currentUser?.uid
-        if (userId != null) {
-            firestore.collection("users")
-                .document(userId)
-                .update("fcm_token", token)
-                .addOnSuccessListener {
-                    Log.d(TAG, "✅ FCM token saved to Firestore for user: $userId")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "❌ Failed to save FCM token: ${e.message}")
-                    // Try to set the document if update fails
-                    val userData = hashMapOf(
-                        "fcm_token" to token
-                    )
-                    firestore.collection("users")
-                        .document(userId)
-                        .set(userData)
-                        .addOnSuccessListener {
-                            Log.d(TAG, "✅ FCM token set via create for user: $userId")
-                        }
-                        .addOnFailureListener { e2 ->
-                            Log.e(TAG, "❌ Failed to set FCM token: ${e2.message}")
-                        }
-                }
-        } else {
+
+        if (userId == null) {
             Log.w(TAG, "⚠️ No user logged in, cannot save FCM token")
+            return
         }
+
+        Log.d(TAG, "💾 Saving token to Firestore for user: $userId")
+
+        firestore.collection("users")
+            .document(userId)
+            .update("fcm_token", token)
+            .addOnSuccessListener {
+                Log.d(TAG, "✅ FCM token saved to Firestore")
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "❌ Update failed: ${e.message}")
+
+                // Fallback: set document
+                val userData = hashMapOf(
+                    "fcm_token" to token
+                )
+                firestore.collection("users")
+                    .document(userId)
+                    .set(userData)
+                    .addOnSuccessListener {
+                        Log.d(TAG, "✅ FCM token set via create")
+                    }
+                    .addOnFailureListener { e2 ->
+                        Log.e(TAG, "❌ SET also failed: ${e2.message}")
+                    }
+            }
     }
 }
