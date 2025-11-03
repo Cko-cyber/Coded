@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coded.data.AuthRepository
+import com.example.coded.managers.NotificationService
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -46,6 +47,7 @@ fun BookCallScreen(
     val currentUser by authRepository.currentUser.collectAsState()
     val firestore = FirebaseFirestore.getInstance()
     val coroutineScope = rememberCoroutineScope()
+    val notificationService = remember { NotificationService() }
 
     var selectedDate by remember { mutableStateOf("") }
     var selectedTime by remember { mutableStateOf("Morning (9AM - 12PM)") }
@@ -300,7 +302,7 @@ fun BookCallScreen(
                             val booking = CallBooking(
                                 id = UUID.randomUUID().toString(),
                                 listingId = listingId,
-                                buyerId = currentUser?.id ?: "", // Use safe call and provide default
+                                buyerId = currentUser?.id ?: "",
                                 sellerId = sellerId,
                                 preferredDate = selectedDate,
                                 preferredTime = selectedTime,
@@ -314,7 +316,16 @@ fun BookCallScreen(
                                 .set(booking)
                                 .await()
 
-                            // ✅ UPDATED: Send detailed notification to seller
+                            // ✅ UPDATED: Send notification using NotificationService
+                            notificationService.sendCallBookingNotification(
+                                recipientId = sellerId,
+                                buyerName = currentUser?.full_name ?: "User",
+                                listingTitle = "Livestock Listing",
+                                listingId = listingId,
+                                buyerId = currentUser?.id
+                            )
+
+                            // ✅ ALSO save notification to Firestore for in-app notifications
                             val notification = mapOf(
                                 "id" to UUID.randomUUID().toString(),
                                 "userId" to sellerId,
@@ -324,7 +335,6 @@ fun BookCallScreen(
                                 "listingId" to listingId,
                                 "isRead" to false,
                                 "createdAt" to Timestamp.now(),
-                                // ✅ ADDED: Detailed booking information
                                 "preferredDate" to selectedDate,
                                 "preferredTime" to selectedTime,
                                 "additionalMessage" to message,

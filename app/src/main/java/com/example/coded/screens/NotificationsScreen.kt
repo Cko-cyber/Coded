@@ -1,12 +1,13 @@
 package com.example.coded.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -32,7 +32,7 @@ import java.util.*
 data class AppNotification(
     val id: String = "",
     val userId: String = "",
-    val type: String = "", // message, call_booking, viewing_booking, listing_update
+    val type: String = "",
     val title: String = "",
     val message: String = "",
     val listingId: String? = null,
@@ -40,7 +40,7 @@ data class AppNotification(
     val createdAt: Timestamp = Timestamp.now()
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun NotificationsScreen(
     navController: NavController,
@@ -53,6 +53,8 @@ fun NotificationsScreen(
     var notifications by remember { mutableStateOf<List<AppNotification>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<AppNotification?>(null) }
+    var showClearAllDialog by remember { mutableStateOf(false) }
 
     val unreadCount = notifications.count { !it.isRead }
 
@@ -60,7 +62,7 @@ fun NotificationsScreen(
     LaunchedEffect(currentUser) {
         if (currentUser != null) {
             listenerRegistration = firestore.collection("notifications")
-                .whereEqualTo("userId", currentUser?.id ?: "") // Use safe call
+                .whereEqualTo("userId", currentUser?.id ?: "")
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
@@ -91,10 +93,39 @@ fun NotificationsScreen(
         }
     }
 
-    // Cleanup listener
     DisposableEffect(Unit) {
         onDispose {
             listenerRegistration?.remove()
+        }
+    }
+
+    // ✅ Delete single notification
+    fun deleteNotification(notification: AppNotification) {
+        coroutineScope.launch {
+            try {
+                firestore.collection("notifications")
+                    .document(notification.id)
+                    .delete()
+                    .await()
+            } catch (e: Exception) {
+                // Handle error silently
+            }
+        }
+    }
+
+    // ✅ Clear all notifications
+    fun clearAllNotifications() {
+        coroutineScope.launch {
+            try {
+                val batch = firestore.batch()
+                notifications.forEach { notification ->
+                    val docRef = firestore.collection("notifications").document(notification.id)
+                    batch.delete(docRef)
+                }
+                batch.commit().await()
+            } catch (e: Exception) {
+                // Handle error silently
+            }
         }
     }
 
@@ -132,20 +163,48 @@ fun NotificationsScreen(
                     navigationIconContentColor = Color.White
                 ),
                 actions = {
+                    // ✅ Mark all as read
                     if (unreadCount > 0) {
                         TextButton(
                             onClick = {
                                 coroutineScope.launch {
+                                    val batch = firestore.batch()
                                     notifications.filter { !it.isRead }.forEach { notification ->
-                                        firestore.collection("notifications")
-                                            .document(notification.id)
-                                            .update("isRead", true)
-                                            .await()
+                                        val docRef = firestore.collection("notifications").document(notification.id)
+                                        batch.update(docRef, "isRead", true)
                                     }
+                                    batch.commit().await()
                                 }
                             }
                         ) {
                             Text("Mark all read", color = Color.White)
+                        }
+                    }
+
+                    // ✅ More options menu
+                    if (notifications.isNotEmpty()) {
+                        var expanded by remember { mutableStateOf(false) }
+
+                        Box {
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(Icons.Default.MoreVert, "More", tint = Color.White)
+                            }
+
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Clear all notifications") },
+                                    onClick = {
+                                        expanded = false
+                                        showClearAllDialog = true
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.DeleteSweep, null, tint = Color.Red)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -158,94 +217,155 @@ fun NotificationsScreen(
                 .padding(padding)
                 .background(Color(0xFFF5F5F5))
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
-                    color = Color(0xFF013B33)
-                )
-            } else if (notifications.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Default.Notifications,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "No notifications yet",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "We'll notify you when there's activity",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
+            when {
+                isLoading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Color(0xFF013B33)
                     )
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(notifications) { notification ->
-                        NotificationItem(
-                            notification = notification,
-                            onClick = {
-                                // Mark as read
-                                coroutineScope.launch {
-                                    if (!notification.isRead) {
-                                        firestore.collection("notifications")
-                                            .document(notification.id)
-                                            .update("isRead", true)
-                                            .await()
-                                    }
-                                }
-
-                                // Navigate based on notification type
-                                when (notification.type) {
-                                    "message" -> {
-                                        notification.listingId?.let { listingId ->
-                                            navController.navigate("chat/$listingId/${currentUser?.id}")
-                                        }
-                                    }
-                                    "call_booking", "viewing_booking" -> {
-                                        notification.listingId?.let { listingId ->
-                                            navController.navigate("single_stock/$listingId")
-                                        }
-                                    }
-                                    else -> {
-                                        notification.listingId?.let { listingId ->
-                                            navController.navigate("single_stock/$listingId")
-                                        }
-                                    }
-                                }
-                            }
+                notifications.isEmpty() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Notifications,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = Color.Gray
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No notifications yet",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "We'll notify you when there's activity",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Gray
+                        )
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(notifications, key = { it.id }) { notification ->
+                            NotificationItem(
+                                notification = notification,
+                                onClick = {
+                                    // Mark as read
+                                    coroutineScope.launch {
+                                        if (!notification.isRead) {
+                                            firestore.collection("notifications")
+                                                .document(notification.id)
+                                                .update("isRead", true)
+                                                .await()
+                                        }
+                                    }
+
+                                    // Navigate based on type
+                                    when (notification.type) {
+                                        "message" -> {
+                                            notification.listingId?.let { listingId ->
+                                                navController.navigate("chat/$listingId/${currentUser?.id}")
+                                            }
+                                        }
+                                        "call_booking", "viewing_booking" -> {
+                                            notification.listingId?.let { listingId ->
+                                                navController.navigate("single_stock/$listingId")
+                                            }
+                                        }
+                                        else -> {
+                                            notification.listingId?.let { listingId ->
+                                                navController.navigate("single_stock/$listingId")
+                                            }
+                                        }
+                                    }
+                                },
+                                onLongClick = {
+                                    showDeleteDialog = notification
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
     }
+
+    // ✅ Delete single notification dialog
+    if (showDeleteDialog != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = null },
+            title = { Text("Delete Notification") },
+            text = { Text("Delete this notification?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleteNotification(showDeleteDialog!!)
+                        showDeleteDialog = null
+                    }
+                ) {
+                    Text("Delete", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // ✅ Clear all notifications dialog
+    if (showClearAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearAllDialog = false },
+            icon = {
+                Icon(Icons.Default.DeleteSweep, null, tint = Color.Red, modifier = Modifier.size(48.dp))
+            },
+            title = { Text("Clear All Notifications") },
+            text = { Text("Are you sure you want to delete all ${notifications.size} notifications? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        clearAllNotifications()
+                        showClearAllDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Clear All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NotificationItem(
     notification: AppNotification,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val dateFormat = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
 
     val (icon, iconColor) = when (notification.type) {
-        "message" -> Icons.Default.Chat to Color(0xFF013B33)
+        "message", "new_message" -> Icons.Default.Chat to Color(0xFF013B33)
         "call_booking" -> Icons.Default.Call to Color(0xFF2196F3)
         "viewing_booking" -> Icons.Default.CalendarToday to Color(0xFFFF6F00)
         else -> Icons.Default.Notifications to Color.Gray
@@ -254,7 +374,10 @@ fun NotificationItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         colors = CardDefaults.cardColors(
             containerColor = if (notification.isRead) Color.White else Color(0xFF013B33).copy(alpha = 0.05f)
         )
@@ -265,7 +388,6 @@ fun NotificationItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // Icon
             Surface(
                 color = iconColor.copy(alpha = 0.1f),
                 shape = CircleShape,
@@ -283,7 +405,6 @@ fun NotificationItem(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Content
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = notification.title,
@@ -304,7 +425,6 @@ fun NotificationItem(
                 )
             }
 
-            // Unread indicator
             if (!notification.isRead) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Box(

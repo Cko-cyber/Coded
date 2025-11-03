@@ -1,7 +1,7 @@
 package com.example.coded.data
 
-import android.R
 import android.util.Log
+import com.example.coded.managers.NotificationService
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -18,22 +18,21 @@ class EnhancedMessageRepository {
     private val usersRef = db.collection("users")
     private val TAG = "EnhancedMessageRepo"
 
+    // ✅ ADD THIS: Initialize notification service
+    private val notificationService = NotificationService()
+
     // Cache for user info to reduce Firestore reads
     private val userInfoCache = mutableMapOf<String, ParticipantInfo>()
     private val conversationCache = mutableMapOf<String, Conversation>()
 
     // Extension functions for MessageStatus
     private fun MessageStatus.toFirestoreString(): String = this.name
-
     private fun String.toMessageStatus(): MessageStatus = MessageStatus.valueOf(this)
 
     // ============================================================
     // CONVERSATION LISTENERS (KEEP THESE METHODS!)
     // ============================================================
 
-    /**
-     * Listen to user's conversations in real-time
-     */
     fun listenToConversations(userId: String): Flow<List<Conversation>> = callbackFlow {
         Log.d(TAG, "🔍 Setting up conversation listener for user: $userId")
 
@@ -51,7 +50,6 @@ class EnhancedMessageRepository {
                     try {
                         val conversation = doc.toObject(Conversation::class.java)
                         conversation?.copy(id = doc.id)?.also {
-                            // Cache the conversation
                             conversationCache[doc.id] = it
                         }
                     } catch (e: Exception) {
@@ -69,9 +67,6 @@ class EnhancedMessageRepository {
         }
     }
 
-    /**
-     * Listen to messages in a conversation in real-time
-     */
     fun listenToMessages(conversationId: String): Flow<List<ConversationMessage>> = callbackFlow {
         Log.d(TAG, "🔍 Setting up message listener for conversation: $conversationId")
 
@@ -105,13 +100,9 @@ class EnhancedMessageRepository {
     }
 
     // ============================================================
-    // CONVERSATION MANAGEMENT - FIXED VERSION
+    // CONVERSATION MANAGEMENT
     // ============================================================
 
-    /**
-     * Get or create a conversation between two users - FIXED VERSION
-     * Uses Try-Create-First approach to avoid permission denied errors
-     */
     suspend fun getOrCreateConversation(
         user1Id: String,
         user2Id: String
@@ -121,13 +112,12 @@ class EnhancedMessageRepository {
         try {
             Log.d(TAG, "🔍 Attempting to create conversation: $conversationId")
 
-            // ✅ FIXED: Try to create first, handle if it already exists
             try {
                 // Get user info
                 val user1Info = getUserInfo(user1Id)
                 val user2Info = getUserInfo(user2Id)
 
-                // Create new conversation - SIMPLIFIED VERSION
+                // Create new conversation
                 val conversation = hashMapOf<String, Any>(
                     "id" to conversationId,
                     "participants" to listOf(user1Id, user2Id),
@@ -173,8 +163,8 @@ class EnhancedMessageRepository {
                     Log.d(TAG, "📱 Conversation already exists: $conversationId")
                     return conversationId
                 } else {
-                    Log.w(TAG, "⚠️ Other error creating conversation, trying to read: ${e.message}")
-                    return tryReadExistingConversation(conversationId, user1Id, user2Id)
+                    Log.w(TAG, "⚠️ Other error creating conversation: ${e.message}")
+                    return tryReadExistingConversation(conversationId)
                 }
             }
 
@@ -184,14 +174,7 @@ class EnhancedMessageRepository {
         }
     }
 
-    /**
-     * Fallback method to read existing conversation when creation fails
-     */
-    private suspend fun tryReadExistingConversation(
-        conversationId: String,
-        user1Id: String,
-        user2Id: String
-    ): String {
+    private suspend fun tryReadExistingConversation(conversationId: String): String {
         return try {
             Log.d(TAG, "🔄 Attempting to read existing conversation: $conversationId")
             val doc = conversationsRef.document(conversationId).get().await()
@@ -209,9 +192,6 @@ class EnhancedMessageRepository {
         }
     }
 
-    /**
-     * Get user info from Firestore
-     */
     private suspend fun getUserInfo(userId: String): ParticipantInfo {
         return try {
             val doc = usersRef.document(userId).get().await()
@@ -229,9 +209,7 @@ class EnhancedMessageRepository {
         }
     }
 
-    /**
-     * Send a message in a conversation
-     */
+    // ✅ FIXED: Send message with notification
     suspend fun sendMessage(
         conversationId: String,
         senderId: String,
@@ -241,6 +219,8 @@ class EnhancedMessageRepository {
         listingSnapshot: ListingSnapshot? = null
     ): Boolean {
         return try {
+            Log.d(TAG, "💬 Sending message from $senderId to $receiverId")
+
             val messageId = conversationsRef
                 .document(conversationId)
                 .collection("messages")
@@ -266,6 +246,8 @@ class EnhancedMessageRepository {
                 .set(message)
                 .await()
 
+            Log.d(TAG, "✅ Message saved to Firestore")
+
             // Update conversation metadata
             updateConversationAfterMessage(
                 conversationId = conversationId,
@@ -273,7 +255,32 @@ class EnhancedMessageRepository {
                 receiverId = receiverId
             )
 
-            // Create notification
+            // ✅ SEND NOTIFICATION HERE!
+            try {
+                Log.d(TAG, "🔔 Attempting to send notification to $receiverId")
+
+                // Get sender name
+                val senderDoc = usersRef.document(senderId).get().await()
+                val senderName = senderDoc.getString("full_name") ?: "Someone"
+
+                Log.d(TAG, "👤 Sender name: $senderName")
+
+                // Send notification via NotificationService
+                notificationService.sendMessageNotification(
+                    recipientId = receiverId,
+                    senderName = senderName,
+                    message = content,
+                    conversationId = conversationId,
+                    senderId = senderId
+                )
+
+                Log.d(TAG, "✅ Notification request sent to NotificationService")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to send notification: ${e.message}", e)
+                // Don't fail the message send if notification fails
+            }
+
+            // Create notification record in Firestore (for in-app notifications)
             createMessageNotification(
                 conversationId = conversationId,
                 senderId = senderId,
@@ -290,16 +297,12 @@ class EnhancedMessageRepository {
         }
     }
 
-    /**
-     * Update conversation after sending a message - FIXED VERSION
-     */
     private suspend fun updateConversationAfterMessage(
         conversationId: String,
         message: ConversationMessage,
         receiverId: String
     ) {
         try {
-            // ✅ FIXED: Use simple map with explicit typing
             val updates = mapOf<String, Any>(
                 "lastMessage" to message.content,
                 "lastMessageTime" to (message.createdAt ?: Timestamp.now()),
@@ -476,7 +479,7 @@ class EnhancedMessageRepository {
             )
 
             notificationsRef.document(notification["id"] as String).set(notification).await()
-            Log.d(TAG, "✅ Notification created")
+            Log.d(TAG, "✅ Notification record created in Firestore")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error creating notification", e)
         }
@@ -486,41 +489,26 @@ class EnhancedMessageRepository {
     // CACHE MANAGEMENT
     // ============================================================
 
-    /**
-     * Clear user cache
-     */
     fun clearUserCache() {
         userInfoCache.clear()
         Log.d(TAG, "🧹 Cleared user cache")
     }
 
-    /**
-     * Clear conversation cache
-     */
     fun clearConversationCache() {
         conversationCache.clear()
         Log.d(TAG, "🧹 Cleared conversation cache")
     }
 
-    /**
-     * Clear all cache
-     */
     fun clearAllCache() {
         userInfoCache.clear()
         conversationCache.clear()
         Log.d(TAG, "🧹 Cleared all cache")
     }
 
-    /**
-     * Get cached conversation
-     */
     fun getCachedConversation(conversationId: String): Conversation? {
         return conversationCache[conversationId]
     }
 
-    /**
-     * Get cached user info
-     */
     fun getCachedUserInfo(userId: String): ParticipantInfo? {
         return userInfoCache[userId]
     }
@@ -548,15 +536,9 @@ class EnhancedMessageRepository {
     // ALIAS METHODS FOR BACKWARD COMPATIBILITY
     // ============================================================
 
-    /**
-     * Alias for listenToMessages
-     */
     fun observeMessages(conversationId: String): Flow<List<ConversationMessage>> =
         listenToMessages(conversationId)
 
-    /**
-     * Alias for listenToConversations
-     */
     fun observeUserConversations(userId: String): Flow<List<Conversation>> =
         listenToConversations(userId)
 }

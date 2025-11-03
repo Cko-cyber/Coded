@@ -13,6 +13,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.example.coded.data.AuthRepository
 import com.example.coded.managers.NotificationManager
@@ -20,9 +21,14 @@ import com.example.coded.managers.NotificationService
 import com.example.coded.navigation.NavGraph
 import com.example.coded.ui.theme.CodedTheme
 import com.example.coded.utils.NotificationPermissionHelper
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class MainActivity : ComponentActivity() {
 
@@ -36,7 +42,6 @@ class MainActivity : ComponentActivity() {
     ) { isGranted: Boolean ->
         if (isGranted) {
             Log.d(TAG, "✅ Notification permission granted")
-            // Initialize FCM with current user
             initializeFCM()
         } else {
             Log.w(TAG, "⚠️ Notification permission denied")
@@ -44,22 +49,37 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Install splash screen for better performance
         installSplashScreen()
-
         super.onCreate(savedInstanceState)
+
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.d(TAG, "🚀 MainActivity onCreate()")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+        // ✅ STEP 1: Check Google Play Services
+        checkPlayServices()
 
         // Initialize notification managers
         notificationManager = NotificationManager(this)
         notificationService = NotificationService()
 
-        // Set up FCM token refresh listener
-        setupFCMTokenRefreshListener()
-
-        // Request notification permission for Android 13+
+        // ✅ STEP 2: Request notification permission
         requestNotificationPermission()
 
-        // Handle notification intents when app is opened from notification
+        // ✅ STEP 3: Force FCM token retrieval after delay
+        lifecycleScope.launch {
+            delay(3000) // Wait 3 seconds for Firebase to initialize
+
+            val currentUser = FirebaseAuth.getInstance().currentUser
+            if (currentUser != null) {
+                Log.d(TAG, "🔄 Force-triggering FCM token retrieval")
+                forceFCMTokenRetrieval(currentUser.uid)
+            } else {
+                Log.w(TAG, "⚠️ No user logged in yet, will retry on resume")
+            }
+        }
+
+        // Handle notification intents
         handleNotificationIntent(intent)
 
         setContent {
@@ -80,27 +100,117 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
-        super.onNewIntent(intent)
-        // Handle notification intents when app is already running
-        intent?.let { handleNotificationIntent(it) }
+    /**
+     * ✅ CHECK IF GOOGLE PLAY SERVICES IS AVAILABLE
+     */
+    private fun checkPlayServices(): Boolean {
+        val apiAvailability = GoogleApiAvailability.getInstance()
+        val resultCode = apiAvailability.isGooglePlayServicesAvailable(this)
+
+        return when {
+            resultCode == ConnectionResult.SUCCESS -> {
+                Log.d(TAG, "✅ Google Play Services is AVAILABLE")
+                true
+            }
+            apiAvailability.isUserResolvableError(resultCode) -> {
+                Log.e(TAG, "❌ Google Play Services error (resolvable): $resultCode")
+                apiAvailability.getErrorDialog(this, resultCode, 9000)?.show()
+                false
+            }
+            else -> {
+                Log.e(TAG, "❌ Google Play Services NOT AVAILABLE (not resolvable)")
+                Log.e(TAG, "   FCM WILL NOT WORK! Use a device/emulator with Play Services")
+                false
+            }
+        }
     }
 
     /**
-     * Handle notification intents when app is opened from notification
+     * ✅ FORCE FCM TOKEN RETRIEVAL WITH COMPREHENSIVE LOGGING
      */
+    private fun forceFCMTokenRetrieval(userId: String) {
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.d(TAG, "🔑 FORCING FCM TOKEN RETRIEVAL")
+        Log.d(TAG, "   User ID: $userId")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+        // ✅ Method 1: Using addOnCompleteListener
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+                Log.d(TAG, "📋 FCM Token Task Completed")
+                Log.d(TAG, "   Is Successful: ${task.isSuccessful}")
+                Log.d(TAG, "   Is Complete: ${task.isComplete}")
+                Log.d(TAG, "   Is Canceled: ${task.isCanceled}")
+
+                when {
+                    task.isSuccessful -> {
+                        val token = task.result
+                        Log.d(TAG, "✅ ✅ ✅ TOKEN RETRIEVED!")
+                        Log.d(TAG, "   Token is null: ${token == null}")
+                        Log.d(TAG, "   Token length: ${token?.length ?: 0}")
+
+                        if (token.isNullOrEmpty()) {
+                            Log.e(TAG, "❌ ❌ ❌ TOKEN IS NULL OR EMPTY!")
+                        } else {
+                            Log.d(TAG, "   First 50 chars: ${token.take(50)}...")
+                            Log.d(TAG, "   Last 30 chars: ...${token.takeLast(30)}")
+
+                            // ✅ SAVE IT!
+                            saveFCMTokenToFirestore(userId, token)
+                        }
+                    }
+                    task.isCanceled -> {
+                        Log.e(TAG, "❌ Token retrieval was CANCELED")
+                    }
+                    else -> {
+                        val exception = task.exception
+                        Log.e(TAG, "❌ ❌ ❌ TOKEN RETRIEVAL FAILED!")
+                        Log.e(TAG, "   Exception type: ${exception?.javaClass?.simpleName}")
+                        Log.e(TAG, "   Message: ${exception?.message}")
+                        Log.e(TAG, "   Cause: ${exception?.cause}")
+                        exception?.printStackTrace()
+                    }
+                }
+            }
+            .addOnSuccessListener { token ->
+                Log.d(TAG, "🎯 Success listener triggered!")
+                Log.d(TAG, "   Token: ${token.take(50)}...")
+            }
+            .addOnFailureListener { exception ->
+                Log.e(TAG, "❌ Failure listener triggered!")
+                Log.e(TAG, "   ${exception.message}")
+                exception.printStackTrace()
+            }
+
+        // ✅ Method 2: Using coroutines as backup
+        lifecycleScope.launch {
+            try {
+                Log.d(TAG, "🔄 Trying coroutine method...")
+                val token = FirebaseMessaging.getInstance().token.await()
+                Log.d(TAG, "✅ Coroutine method SUCCESS: ${token.take(50)}...")
+                saveFCMTokenToFirestore(userId, token)
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Coroutine method failed: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        intent?.let { handleNotificationIntent(it) }
+    }
+
     private fun handleNotificationIntent(intent: Intent) {
         when (intent.getStringExtra("open_screen")) {
             "messages" -> {
                 val conversationId = intent.getStringExtra("conversation_id")
                 val senderName = intent.getStringExtra("sender_name")
-                Log.d(TAG, "📱 Opening messages screen for conversation: $conversationId from $senderName")
-                // You can navigate to specific conversation here
+                Log.d(TAG, "📱 Opening messages: $conversationId from $senderName")
             }
             "notifications" -> {
                 val listingId = intent.getStringExtra("listing_id")
-                Log.d(TAG, "📱 Opening notifications screen for listing: $listingId")
-                // You can navigate to notifications screen here
+                Log.d(TAG, "📱 Opening notifications for listing: $listingId")
             }
             else -> {
                 Log.d(TAG, "📱 Opening default screen")
@@ -108,16 +218,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Request notification permission for Android 13+
-     */
     private fun requestNotificationPermission() {
         if (!NotificationPermissionHelper.hasNotificationPermission(this)) {
             Log.d(TAG, "📱 Requesting notification permission...")
 
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
                 if (NotificationPermissionHelper.shouldShowPermissionRationale(this)) {
-                    // Show explanation to user before requesting permission
                     Log.d(TAG, "ℹ️ Showing permission rationale")
                 }
                 requestPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -128,154 +234,152 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Initialize FCM with current user - GET AND STORE FCM TOKEN
-     */
     private fun initializeFCM() {
         val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
             val userId = currentUser.uid
             Log.d(TAG, "🔑 Initializing FCM for user: $userId")
-
-            // Get FCM token and save to user profile
             getAndSaveFCMToken(userId)
-
             notificationManager.initializeFCM(userId)
         } else {
             Log.w(TAG, "⚠️ No user logged in, FCM initialization deferred")
         }
     }
 
-    /**
-     * Get FCM token and save it to user's Firestore document
-     */
     private fun getAndSaveFCMToken(userId: String) {
         Log.d(TAG, "🟡 Starting FCM token retrieval for user: $userId")
 
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (task.isSuccessful) {
                 val token = task.result
-                Log.d(TAG, "🔥 FCM Token retrieved successfully: ${token?.length} characters")
+                Log.d(TAG, "🔥 FCM Token retrieved: ${token?.length} characters")
                 Log.d(TAG, "🔥 First 50 chars: ${token?.take(50)}...")
-
-                // Save token to user profile in Firestore
                 saveFCMTokenToFirestore(userId, token)
             } else {
                 val exception = task.exception
                 Log.e(TAG, "❌ Failed to get FCM token", exception)
-                Log.e(TAG, "❌ Error details: ${exception?.message}")
+                Log.e(TAG, "❌ Error: ${exception?.message}")
             }
-        }
-
-        // Also set up a listener for token refresh
-        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-            Log.d(TAG, "🔄 FCM Token (from success listener): ${token.length} characters")
-            Log.d(TAG, "🔄 First 50 chars: ${token.take(50)}...")
-            saveFCMTokenToFirestore(userId, token)
         }
     }
 
     /**
-     * Save FCM token to user's document in Firestore
+     * ✅ SAVE FCM TOKEN TO FIRESTORE WITH VERIFICATION
      */
     private fun saveFCMTokenToFirestore(userId: String, token: String) {
         val userRef = FirebaseFirestore.getInstance()
             .collection("users")
             .document(userId)
 
-        Log.d(TAG, "🟡 Attempting to save FCM token for user: $userId")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Log.d(TAG, "💾 SAVING FCM TOKEN TO FIRESTORE")
+        Log.d(TAG, "   User ID: $userId")
+        Log.d(TAG, "   Token: ${token.take(50)}...")
+        Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-        // First, let's check if the user document exists and see its current structure
-        userRef.get().addOnSuccessListener { document ->
-            if (document.exists()) {
-                Log.d(TAG, "📄 User document exists, current fields: ${document.data?.keys}")
+        userRef.get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    Log.d(TAG, "📄 User document EXISTS")
+                    Log.d(TAG, "   Current fields: ${document.data?.keys}")
 
-                // Try multiple field name variations to ensure it works
-                val updateData = hashMapOf<String, Any>(
-                    "fcm_token" to token,
-                    "updated_at" to com.google.firebase.Timestamp.now()
-                )
+                    val updateData = hashMapOf<String, Any>(
+                        "fcm_token" to token,
+                        "updated_at" to com.google.firebase.Timestamp.now()
+                    )
 
-                userRef.update(updateData)
-                    .addOnSuccessListener {
-                        Log.d(TAG, "✅ FCM token successfully saved to user: $userId")
-                        Log.d(TAG, "✅ Token: ${token.take(20)}...")
-
-                        // Verify the save by reading it back
-                        verifyFCMTokenSave(userId)
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "❌ Failed to update user document with FCM token", e)
-                        Log.e(TAG, "❌ Error: ${e.message}")
-
-                        // Try alternative approach - set with merge
-                        val userData = document.data?.toMutableMap() ?: mutableMapOf()
-                        userData["fcm_token"] = token
-                        userData["updated_at"] = com.google.firebase.Timestamp.now()
-
-                        userRef.set(userData).addOnSuccessListener {
-                            Log.d(TAG, "✅ FCM token saved using set() with merge")
+                    userRef.update(updateData)
+                        .addOnSuccessListener {
+                            Log.d(TAG, "✅ ✅ ✅ TOKEN SAVED SUCCESSFULLY!")
+                            Log.d(TAG, "   Token: ${token.take(20)}...")
                             verifyFCMTokenSave(userId)
-                        }.addOnFailureListener { e2 ->
-                            Log.e(TAG, "❌ Failed to save with set()", e2)
                         }
-                    }
-            } else {
-                Log.w(TAG, "⚠️ User document does NOT exist for: $userId")
-                Log.w(TAG, "⚠️ FCM token cannot be saved until user profile is created")
+                        .addOnFailureListener { e ->
+                            Log.e(TAG, "❌ Update failed: ${e.message}")
 
-                // Create a basic user document with FCM token
-                val newUserData = hashMapOf(
-                    "id" to userId,
-                    "fcm_token" to token,
-                    "created_at" to com.google.firebase.Timestamp.now(),
-                    "updated_at" to com.google.firebase.Timestamp.now()
-                )
+                            // Fallback: set with merge
+                            val userData = document.data?.toMutableMap() ?: mutableMapOf()
+                            userData["fcm_token"] = token
+                            userData["updated_at"] = com.google.firebase.Timestamp.now()
 
-                userRef.set(newUserData)
-                    .addOnSuccessListener {
-                        Log.d(TAG, "✅ Created new user document with FCM token")
-                        verifyFCMTokenSave(userId)
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "❌ Failed to create user document", e)
-                    }
+                            userRef.set(userData)
+                                .addOnSuccessListener {
+                                    Log.d(TAG, "✅ Token saved via SET")
+                                    verifyFCMTokenSave(userId)
+                                }
+                                .addOnFailureListener { e2 ->
+                                    Log.e(TAG, "❌ SET also failed: ${e2.message}")
+                                }
+                        }
+                } else {
+                    Log.w(TAG, "⚠️ User document DOES NOT exist for: $userId")
+                    Log.w(TAG, "   Creating new document...")
+
+                    val newUserData = hashMapOf(
+                        "id" to userId,
+                        "fcm_token" to token,
+                        "created_at" to com.google.firebase.Timestamp.now(),
+                        "updated_at" to com.google.firebase.Timestamp.now()
+                    )
+
+                    userRef.set(newUserData)
+                        .addOnSuccessListener {
+                            Log.d(TAG, "✅ Created new user document with FCM token")
+                            verifyFCMTokenSave(userId)
+                        }
+                        .addOnFailureListener { e ->
+                            Log.e(TAG, "❌ Failed to create document: ${e.message}")
+                        }
+                }
             }
-        }.addOnFailureListener { e ->
-            Log.e(TAG, "❌ Failed to check if user document exists", e)
-        }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "❌ Failed to check document existence: ${e.message}")
+            }
     }
 
     /**
-     * Verify that FCM token was actually saved
+     * ✅ VERIFY TOKEN WAS SAVED - WITH DELAY
      */
     private fun verifyFCMTokenSave(userId: String) {
-        val userRef = FirebaseFirestore.getInstance()
-            .collection("users")
-            .document(userId)
+        lifecycleScope.launch {
+            try {
+                delay(2000) // Wait 2 seconds before verifying
 
-        userRef.get().addOnSuccessListener { document ->
-            if (document.exists()) {
-                val savedToken = document.getString("fcm_token")
-                if (savedToken != null) {
-                    Log.d(TAG, "✅ VERIFIED: FCM token is saved in user document")
-                    Log.d(TAG, "✅ Saved token: ${savedToken.take(20)}...")
-                    Log.d(TAG, "✅ Full token length: ${savedToken.length} characters")
+                val userRef = FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(userId)
+
+                val doc = userRef.get().await()
+
+                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.d(TAG, "🔍 VERIFICATION RESULTS")
+
+                if (doc.exists()) {
+                    val savedToken = doc.getString("fcm_token")
+
+                    Log.d(TAG, "   Document exists: YES")
+                    Log.d(TAG, "   Token field: ${if (savedToken != null) "EXISTS" else "NULL"}")
+
+                    if (!savedToken.isNullOrEmpty()) {
+                        Log.d(TAG, "   Token length: ${savedToken.length}")
+                        Log.d(TAG, "   First 30 chars: ${savedToken.take(30)}...")
+                        Log.d(TAG, "✅ ✅ ✅ TOKEN VERIFIED IN FIRESTORE!")
+                    } else {
+                        Log.e(TAG, "❌ ❌ ❌ TOKEN IS NULL OR EMPTY IN FIRESTORE!")
+                        Log.e(TAG, "   Available fields: ${doc.data?.keys}")
+                    }
                 } else {
-                    Log.w(TAG, "⚠️ FCM token field exists but is null")
-                    Log.w(TAG, "⚠️ Available fields: ${document.data?.keys}")
+                    Log.e(TAG, "❌ User document not found during verification")
                 }
-            } else {
-                Log.e(TAG, "❌ User document not found during verification")
+
+                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Verification failed: ${e.message}")
+                e.printStackTrace()
             }
-        }.addOnFailureListener { e ->
-            Log.e(TAG, "❌ Failed to verify FCM token save", e)
         }
     }
 
-    /**
-     * Set up FCM token refresh listener
-     */
     private fun setupFCMTokenRefreshListener() {
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (task.isSuccessful) {
@@ -289,9 +393,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Handle permission request result (for backward compatibility)
-     */
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -313,25 +414,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Refresh FCM token when app comes to foreground to ensure it's current
+        Log.d(TAG, "🔄 onResume() - Refreshing FCM token")
+
         val currentUser = FirebaseAuth.getInstance().currentUser
         currentUser?.let { user ->
-            Log.d(TAG, "🔄 Refreshing FCM token on resume")
-            getAndSaveFCMToken(user.uid)
+            forceFCMTokenRetrieval(user.uid)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // Clean up FCM when activity is destroyed (optional)
-        val currentUser = FirebaseAuth.getInstance().currentUser
-        currentUser?.let { user ->
-            // Only call cleanup if the method exists in NotificationManager
-            // notificationManager.cleanupFCM(user.uid) // Commented out if method doesn't exist
-        }
+        Log.d(TAG, "🛑 onDestroy()")
     }
 
-    // Public methods to access notification service from other parts of the app
     fun getNotificationService(): NotificationService {
         return notificationService
     }
