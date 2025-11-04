@@ -36,6 +36,7 @@ data class AppNotification(
     val title: String = "",
     val message: String = "",
     val listingId: String? = null,
+    val senderId: String? = null, // ✅ ADDED: For message notifications
     val isRead: Boolean = false,
     val createdAt: Timestamp = Timestamp.now()
 )
@@ -80,6 +81,7 @@ fun NotificationsScreen(
                                     title = doc.getString("title") ?: "",
                                     message = doc.getString("message") ?: "",
                                     listingId = doc.getString("listingId"),
+                                    senderId = doc.getString("senderId"), // ✅ ADDED
                                     isRead = doc.getBoolean("isRead") ?: false,
                                     createdAt = doc.getTimestamp("createdAt") ?: Timestamp.now()
                                 )
@@ -272,19 +274,42 @@ fun NotificationsScreen(
                                         }
                                     }
 
-                                    // Navigate based on type
+                                    // ✅ UPDATED: Navigate based on notification type
                                     when (notification.type) {
-                                        "message" -> {
-                                            notification.listingId?.let { listingId ->
-                                                navController.navigate("chat/$listingId/${currentUser?.id}")
+                                        "new_message", "message" -> {
+                                            // Navigate to chat screen with the sender
+                                            val senderId = notification.senderId ?: notification.listingId ?: ""
+                                            if (senderId.isNotBlank() && currentUser?.id != null) {
+                                                navController.navigate("chat/$senderId/null")
+                                            } else {
+                                                // Fallback to messages screen if no senderId
+                                                navController.navigate("messages")
                                             }
                                         }
                                         "call_booking", "viewing_booking" -> {
+                                            // Navigate to booking details screen
+                                            notification.listingId?.let { listingId ->
+                                                val bookingType = when (notification.type) {
+                                                    "call_booking" -> "call"
+                                                    "viewing_booking" -> "viewing"
+                                                    else -> "call"
+                                                }
+                                                navController.navigate("booking_details/$listingId/$bookingType")
+                                            } ?: run {
+                                                // Fallback to listing if no booking details
+                                                notification.listingId?.let { listingId ->
+                                                    navController.navigate("single_stock/$listingId")
+                                                }
+                                            }
+                                        }
+                                        "listing_interest" -> {
+                                            // Navigate to listing details
                                             notification.listingId?.let { listingId ->
                                                 navController.navigate("single_stock/$listingId")
                                             }
                                         }
                                         else -> {
+                                            // Default navigation
                                             notification.listingId?.let { listingId ->
                                                 navController.navigate("single_stock/$listingId")
                                             }

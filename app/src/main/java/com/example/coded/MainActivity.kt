@@ -10,15 +10,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.coded.data.AuthRepository
 import com.example.coded.managers.NotificationManager
 import com.example.coded.managers.NotificationService
 import com.example.coded.navigation.NavGraph
+import com.example.coded.services.MyFirebaseMessagingService
 import com.example.coded.ui.theme.CodedTheme
 import com.example.coded.utils.NotificationPermissionHelper
 import com.google.android.gms.common.ConnectionResult
@@ -32,7 +35,13 @@ import kotlinx.coroutines.tasks.await
 
 class MainActivity : ComponentActivity() {
 
-    private val TAG = "MainActivity"
+    companion object {
+        private const val TAG = "MainActivity"
+    }
+
+    // Store navController as a class variable for onNewIntent
+    private var navController: NavController? = null
+
     private lateinit var notificationManager: NotificationManager
     private lateinit var notificationService: NotificationService
 
@@ -79,22 +88,100 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Handle notification intents
-        handleNotificationIntent(intent)
-
         setContent {
             CodedTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val navController = rememberNavController()
+                    val rememberedNavController = rememberNavController()
                     val authRepository = remember { AuthRepository() }
 
+                    // Store the navController in class variable
+                    navController = rememberedNavController
+
+                    // ✅ Handle deep links from notifications
+                    LaunchedEffect(Unit) {
+                        handleDeepLink(intent, rememberedNavController)
+                    }
+
                     NavGraph(
-                        navController = navController,
+                        navController = rememberedNavController,
                         authRepository = authRepository
                     )
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+
+        // Handle deep link when app is already running
+        intent?.let {
+            Log.d(TAG, "🔗 New intent received: ${it.action}")
+            navController?.let { controller ->
+                handleDeepLink(intent, controller)
+            }
+        }
+    }
+
+    /**
+     * ✅ DEEP LINK HANDLER
+     * Routes user to correct screen based on notification type
+     */
+    private fun handleDeepLink(intent: Intent?, navController: NavController) {
+        intent ?: return
+
+        when (intent.action) {
+            // MESSAGE NOTIFICATION → Chat Screen (NOT Messages screen)
+            MyFirebaseMessagingService.ACTION_OPEN_MESSAGES -> {
+                val conversationId = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_CONVERSATION_ID)
+                val senderId = intent.getStringExtra("senderId")
+
+                Log.d(TAG, "📨 Opening chat: senderId=$senderId")
+
+                if (!senderId.isNullOrBlank()) {
+                    // Navigate directly to chat screen with the sender
+                    navController.navigate("chat/$senderId/null") {
+                        popUpTo("main_home") { inclusive = false }
+                    }
+                } else {
+                    // Fallback to messages screen if no senderId
+                    navController.navigate("messages") {
+                        popUpTo("main_home") { inclusive = false }
+                    }
+                }
+            }
+
+            // BOOKING NOTIFICATION → Booking Details Screen
+            MyFirebaseMessagingService.ACTION_OPEN_BOOKING_DETAILS -> {
+                val listingId = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_LISTING_ID)
+                val bookingType = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_BOOKING_TYPE)
+                val buyerName = intent.getStringExtra("buyerName")
+                val buyerId = intent.getStringExtra("buyerId")
+                val preferredDate = intent.getStringExtra("preferredDate")
+                val preferredTime = intent.getStringExtra("preferredTime")
+                val numberOfPeople = intent.getStringExtra("numberOfPeople")
+
+                Log.d(TAG, "📅 Opening booking details: type=$bookingType, listingId=$listingId")
+
+                if (!listingId.isNullOrBlank() && !bookingType.isNullOrBlank()) {
+                    navController.navigate(
+                        "booking_details/$listingId/$bookingType?buyerName=$buyerName&buyerId=$buyerId&preferredDate=$preferredDate&preferredTime=$preferredTime&numberOfPeople=$numberOfPeople"
+                    ) {
+                        popUpTo("main_home") { inclusive = false }
+                    }
+                }
+            }
+
+            // GENERAL NOTIFICATION → Notifications Screen
+            MyFirebaseMessagingService.ACTION_OPEN_NOTIFICATIONS -> {
+                Log.d(TAG, "🔔 Opening notifications screen")
+
+                navController.navigate("notifications") {
+                    popUpTo("main_home") { inclusive = false }
                 }
             }
         }
@@ -192,28 +279,6 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Coroutine method failed: ${e.message}")
                 e.printStackTrace()
-            }
-        }
-    }
-
-    override fun onNewIntent(intent: Intent?) {
-        super.onNewIntent(intent)
-        intent?.let { handleNotificationIntent(it) }
-    }
-
-    private fun handleNotificationIntent(intent: Intent) {
-        when (intent.getStringExtra("open_screen")) {
-            "messages" -> {
-                val conversationId = intent.getStringExtra("conversation_id")
-                val senderName = intent.getStringExtra("sender_name")
-                Log.d(TAG, "📱 Opening messages: $conversationId from $senderName")
-            }
-            "notifications" -> {
-                val listingId = intent.getStringExtra("listing_id")
-                Log.d(TAG, "📱 Opening notifications for listing: $listingId")
-            }
-            else -> {
-                Log.d(TAG, "📱 Opening default screen")
             }
         }
     }

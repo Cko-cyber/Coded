@@ -44,7 +44,7 @@ fun NavGraph(
             ProfileScreen(navController, authRepository)
         }
 
-        // REMOVED DUPLICATE: Only define Messages.route once
+        // Messages Screen (Conversations List)
         composable(Screen.Messages.route) {
             EnhancedMessagesScreen(navController, authRepository)
         }
@@ -66,7 +66,7 @@ fun NavGraph(
             EditListingScreen(navController, listingId)
         }
 
-        // Chat Screen - CORRECTED ROUTE (only define once)
+        // Chat Screen - Individual Conversation
         composable(
             route = "chat/{userId}/{listingId}",
             arguments = listOf(
@@ -113,6 +113,52 @@ fun NavGraph(
             val listingId = backStackEntry.arguments?.getString("listingId") ?: ""
             val sellerId = backStackEntry.arguments?.getString("sellerId") ?: ""
             ScheduleViewingScreen(navController, listingId, sellerId, authRepository)
+        }
+
+        // ✅ ADDED: Booking Details Screen
+        composable(
+            route = "booking_details/{listingId}/{bookingType}?buyerName={buyerName}&buyerId={buyerId}&preferredDate={preferredDate}&preferredTime={preferredTime}&numberOfPeople={numberOfPeople}",
+            arguments = listOf(
+                navArgument("listingId") { type = NavType.StringType },
+                navArgument("bookingType") { type = NavType.StringType },
+                navArgument("buyerName") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("buyerId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("preferredDate") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("preferredTime") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("numberOfPeople") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            BookingDetailsScreen(
+                navController = navController,
+                authRepository = authRepository,
+                listingId = backStackEntry.arguments?.getString("listingId") ?: "",
+                bookingType = backStackEntry.arguments?.getString("bookingType") ?: "call",
+                buyerName = backStackEntry.arguments?.getString("buyerName"),
+                buyerId = backStackEntry.arguments?.getString("buyerId"),
+                preferredDate = backStackEntry.arguments?.getString("preferredDate"),
+                preferredTime = backStackEntry.arguments?.getString("preferredTime"),
+                numberOfPeople = backStackEntry.arguments?.getString("numberOfPeople")
+            )
         }
 
         // Profile Sub-screens

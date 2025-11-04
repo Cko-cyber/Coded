@@ -28,6 +28,7 @@ import coil.compose.AsyncImage
 import com.example.coded.data.AuthRepository
 import com.example.coded.data.Listing
 import com.example.coded.viewmodels.ListingsViewModel
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.delay
@@ -44,6 +45,7 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
 
     var unreadNotificationsCount by remember { mutableStateOf(0) }
     var listenerRegistration by remember { mutableStateOf<ListenerRegistration?>(null) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
 
     // Listen for unread notifications count
     LaunchedEffect(currentUser) {
@@ -72,6 +74,15 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
     // Filter premium listings
     val premiumListings = remember(allListings) {
         allListings.filter { it.listingTier == "PREMIUM" && it.is_active }
+    }
+
+    // Logout function
+    fun logout() {
+        FirebaseAuth.getInstance().signOut()
+        authRepository.signOut()
+        navController.navigate(Screen.Login.route) {
+            popUpTo(0) // Clear all back stack
+        }
     }
 
     Scaffold(
@@ -194,17 +205,18 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
                     )
                 )
 
+                // ✅ REPLACED Profile with Logout
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                    label = { Text("Profile") },
-                    selected = currentRoute == Screen.Profile.route,
+                    icon = { Icon(Icons.Default.Logout, contentDescription = "Logout") },
+                    label = { Text("Logout") },
+                    selected = false, // Logout is never "selected"
                     onClick = {
-                        navController.navigate(Screen.Profile.route)
+                        showLogoutDialog = true
                     },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFF013B33),
-                        selectedTextColor = Color(0xFF013B33),
-                        indicatorColor = Color(0xFF013B33).copy(alpha = 0.1f),
+                        selectedIconColor = Color.Red,
+                        selectedTextColor = Color.Red,
+                        indicatorColor = Color.Red.copy(alpha = 0.1f),
                         unselectedIconColor = Color.Gray,
                         unselectedTextColor = Color.Gray
                     )
@@ -219,6 +231,39 @@ fun MainHomeScreen(navController: NavController, authRepository: AuthRepository)
         ) {
             HomeContent(navController, authRepository, premiumListings)
         }
+    }
+
+    // ✅ Logout Confirmation Dialog
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Logout,
+                    contentDescription = "Logout",
+                    tint = Color.Red,
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = { Text("Logout") },
+            text = { Text("Are you sure you want to logout?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        logout()
+                        showLogoutDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Logout")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
