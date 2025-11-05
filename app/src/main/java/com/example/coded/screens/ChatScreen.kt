@@ -35,7 +35,7 @@ import com.example.coded.viewmodels.MessageViewModelFactory
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-
+import androidx.compose.foundation.clickable  // ✅ ADD THIS
 /**
  * 💬 ENHANCED CHAT SCREEN - 2025 Edition
  *

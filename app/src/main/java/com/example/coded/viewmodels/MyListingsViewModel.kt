@@ -32,21 +32,14 @@ class MyListingsViewModel : ViewModel() {
     private val _operationInProgress = MutableStateFlow<String?>(null)
     val operationInProgress: StateFlow<String?> = _operationInProgress
 
-    init {
-        Log.d(TAG, "✅ MyListingsViewModel initialized")
-    }
-
-    // Real-time listener for user's listings
     fun loadUserListings(userId: String) {
         Log.d(TAG, "📥 Setting up real-time listener for user: $userId")
         currentUserId = userId
         _isLoading.value = true
         _error.value = null
 
-        // Remove any existing listener
         listenerRegistration?.remove()
 
-        // Set up new real-time listener
         listenerRegistration = firestore.collection("listings")
             .whereEqualTo("user_id", userId)
             .orderBy("created_at", Query.Direction.DESCENDING)
@@ -62,47 +55,59 @@ class MyListingsViewModel : ViewModel() {
                 if (snapshot != null && !snapshot.isEmpty) {
                     val userListings = snapshot.documents.mapNotNull { doc ->
                         try {
-                            val listing = doc.toObject(Listing::class.java)?.copy(id = doc.id)
-                            Log.d(TAG, "📄 Loaded listing: ${listing?.breed} - Active: ${listing?.is_active} - ID: ${listing?.id}")
-                            listing
+                            doc.toObject(Listing::class.java)?.copy(id = doc.id)
                         } catch (e: Exception) {
                             Log.e(TAG, "❌ Error parsing listing ${doc.id}: ${e.message}")
                             null
                         }
                     }
-
-                    Log.d(TAG, "✅ Real-time update: ${userListings.size} listings")
                     _listings.value = userListings
                     _error.value = null
                 } else {
-                    Log.d(TAG, "📭 No listings found for user: $userId")
                     _listings.value = emptyList()
                     _error.value = null
                 }
             }
     }
 
-    fun toggleListingActive(listingId: String, isActive: Boolean) {
+    /**
+     * ✅ FIXED: Toggle listing active status with proper field update
+     */
+    fun toggleListingActive(listingId: String, newActiveState: Boolean) {
         _operationInProgress.value = "Updating listing..."
 
         viewModelScope.launch {
             try {
-                Log.d(TAG, "🔄 Toggling listing $listingId to active=$isActive")
+                Log.d(TAG, "🔄 Toggling listing $listingId to active=$newActiveState")
 
-                // FIXED: Use individual field updates with correct field names
+                // Update Firestore with the correct field name
+                val updates = hashMapOf<String, Any>(
+                    "is_active" to newActiveState,
+                    "updated_at" to Timestamp.now()
+                )
+
                 firestore.collection("listings")
                     .document(listingId)
-                    .update(
-                        "is_active", isActive,
-                        "updated_at", Timestamp.now()
-                    )
+                    .update(updates)
                     .await()
 
-                Log.d(TAG, "✅ Listing toggled successfully in Firestore")
+                Log.d(TAG, "✅ Listing toggled successfully")
+
+                // Optimistically update local state
+                _listings.value = _listings.value.map { listing ->
+                    if (listing.id == listingId) {
+                        listing.copy(is_active = newActiveState)
+                    } else {
+                        listing
+                    }
+                }
 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Error toggling listing: ${e.message}", e)
                 _error.value = "Failed to update listing: ${e.message}"
+
+                // Revert optimistic update on error
+                refreshUserListings()
             } finally {
                 _operationInProgress.value = null
             }
@@ -116,7 +121,6 @@ class MyListingsViewModel : ViewModel() {
             try {
                 Log.d(TAG, "🗑️ Deleting listing: $listingId")
 
-                // Delete from Firestore
                 firestore.collection("listings")
                     .document(listingId)
                     .delete()
@@ -124,7 +128,7 @@ class MyListingsViewModel : ViewModel() {
 
                 Log.d(TAG, "✅ Deleted listing: $listingId")
 
-                // Remove from local state immediately for better UX
+                // Remove from local state
                 _listings.value = _listings.value.filter { it.id != listingId }
 
             } catch (e: Exception) {
@@ -138,11 +142,7 @@ class MyListingsViewModel : ViewModel() {
 
     fun refreshUserListings() {
         currentUserId?.let { userId ->
-            Log.d(TAG, "🔄 Manual refresh requested for user: $userId")
             loadUserListings(userId)
-        } ?: run {
-            Log.e(TAG, "❌ Cannot refresh: currentUserId is null")
-            _error.value = "Cannot refresh: User not set"
         }
     }
 
@@ -150,7 +150,6 @@ class MyListingsViewModel : ViewModel() {
         _error.value = null
     }
 
-    // Stop the listener when ViewModel is cleared
     override fun onCleared() {
         super.onCleared()
         listenerRegistration?.remove()
