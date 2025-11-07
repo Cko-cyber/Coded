@@ -1,11 +1,8 @@
 package com.example.coded.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,7 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -26,21 +25,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.coded.data.*
+import com.example.coded.ui.theme.*
 import com.example.coded.viewmodels.ListingsViewModel
 import kotlinx.coroutines.delay
-
-// Add the missing ListingFilter enum
-enum class ListingFilter(val displayName: String) {
-    ALL("All"),
-    FREE("Free"),
-    BASIC("Basic"),
-    BULK("Bulk"),
-    PREMIUM("Premium")
-}
+import androidx.compose.foundation.pullRefresh
+import androidx.compose.foundation.pullRefreshState
+import androidx.compose.foundation.rememberPullRefreshState
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ListingsScreen(
+fun ListingsScreenWithRefresh(
     navController: NavController,
     authRepository: AuthRepository
 ) {
@@ -51,6 +45,20 @@ fun ListingsScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(ListingFilter.ALL) }
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            listingsViewModel.loadListings()
+            // Simulate network delay
+            LaunchedEffect(Unit) {
+                delay(1000)
+                isRefreshing = false
+            }
+        }
+    )
 
     // Filter listings based on search and filter
     val filteredListings = remember(listings, searchQuery, selectedFilter) {
@@ -61,7 +69,7 @@ fun ListingsScreen(
             result = listingsViewModel.searchListings(searchQuery)
         }
 
-        // FIXED: Compare string values instead of enum
+        // Apply tier filter
         if (selectedFilter != ListingFilter.ALL) {
             result = result.filter { it.listingTier == selectedFilter.name }
         }
@@ -79,7 +87,7 @@ fun ListingsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF013B33),
+                    containerColor = HerdmatDeepGreen,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -90,7 +98,8 @@ fun ListingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color(0xFFF5F5F5))
+                .pullRefresh(pullRefreshState)
+                .background(Neutral50)
         ) {
             Column(
                 modifier = Modifier
@@ -112,7 +121,8 @@ fun ListingsScreen(
                             }
                         }
                     },
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -122,7 +132,7 @@ fun ListingsScreen(
                     text = "Filter by Tier:",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF013B33)
+                    color = Primary900
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -137,7 +147,7 @@ fun ListingsScreen(
                             onClick = { selectedFilter = filter },
                             label = { Text(filter.displayName) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF013B33),
+                                selectedContainerColor = Primary700,
                                 selectedLabelColor = Color.White
                             )
                         )
@@ -146,7 +156,7 @@ fun ListingsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Listings Count with Scroll Hint
+                // Listings Count
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -155,28 +165,8 @@ fun ListingsScreen(
                     Text(
                         text = "Showing ${filteredListings.size} listings",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
+                        color = Neutral700
                     )
-
-                    // Scroll hint indicator
-                    if (filteredListings.size > 1) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Swipe to browse",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF013B33)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Scroll down",
-                                tint = Color(0xFF013B33),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -188,7 +178,7 @@ fun ListingsScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = Color(0xFF013B33))
+                            CircularProgressIndicator(color = Primary700)
                         }
                     }
 
@@ -202,20 +192,20 @@ fun ListingsScreen(
                                 Icons.Default.Error,
                                 contentDescription = "Error",
                                 modifier = Modifier.size(64.dp),
-                                tint = Color.Red
+                                tint = ErrorRed
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = error!!,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color.Gray,
+                                color = Neutral700,
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = { listingsViewModel.loadListings() },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF013B33)
+                                    containerColor = Primary700
                                 )
                             ) {
                                 Text("Retry")
@@ -233,7 +223,7 @@ fun ListingsScreen(
                                 Icons.Default.Pets,
                                 contentDescription = "No listings",
                                 modifier = Modifier.size(64.dp),
-                                tint = Color.Gray
+                                tint = Neutral500
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
@@ -243,7 +233,7 @@ fun ListingsScreen(
                                     "No listings available"
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Color.Gray
+                                color = Neutral700
                             )
                             if (searchQuery.isNotEmpty() || selectedFilter != ListingFilter.ALL) {
                                 Spacer(modifier = Modifier.height(16.dp))
@@ -253,7 +243,7 @@ fun ListingsScreen(
                                         selectedFilter = ListingFilter.ALL
                                     },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF013B33)
+                                        containerColor = Primary700
                                     )
                                 ) {
                                     Text("Clear Filters")
@@ -263,17 +253,267 @@ fun ListingsScreen(
                     }
 
                     else -> {
-                        // OPTION 1: Using VerticalPager for SNAP SCROLLING (Full tiles only)
-                        SnapScrollListings(filteredListings, navController, authRepository)
-
-                        // OPTION 2: Using LazyColumn with enhanced UX (uncomment to use instead)
-                        // EnhancedLazyColumnListings(filteredListings, navController, authRepository)
+                        // Use LazyColumn with modern cards
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            items(filteredListings) { listing ->
+                                ModernListingCard(
+                                    listing = listing,
+                                    onClick = {
+                                        navController.navigate("${Screen.SingleStock.route}/${listing.id}")
+                                    },
+                                    navController = navController,
+                                    authRepository = authRepository,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
                     }
+                }
+            }
+
+            PullRefreshIndicator(
+                refreshing = isRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                backgroundColor = Surface,
+                contentColor = Primary700
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModernListingCard(
+    listing: Listing,
+    onClick: () -> Unit,
+    navController: NavController,
+    authRepository: AuthRepository,
+    modifier: Modifier = Modifier
+) {
+    val currentUser by authRepository.currentUser.collectAsState()
+    val isOwnListing = listing.user_id == currentUser?.id
+
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Surface
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 8.dp
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Image with gradient overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+            ) {
+                if (listing.image_urls.isNotEmpty() && listing.image_urls.first().isNotEmpty()) {
+                    AsyncImage(
+                        model = listing.image_urls.first(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // Fallback when no image
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Neutral300),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Pets,
+                                contentDescription = "No Image",
+                                modifier = Modifier.size(48.dp),
+                                tint = Neutral600
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "No Image Available",
+                                color = Neutral600
+                            )
+                        }
+                    }
+                }
+
+                // Gradient overlay for better text readability
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.7f)
+                                ),
+                                startY = 0f,
+                                endY = 600f
+                            )
+                        )
+                )
+
+                // Tier badge
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                    color = getTierColor(listing.getTierEnum()),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = listing.getTierEnum().displayName,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Surface,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Price overlay
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp),
+                    color = Surface,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "E ${listing.price}",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Primary900,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Edit button for own listings
+                if (isOwnListing) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(12.dp),
+                        color = Primary700.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(8.dp),
+                        onClick = {
+                            if (listing.id != null) {
+                                navController.navigate("edit_listing/${listing.id}")
+                            }
+                        }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit Listing",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Edit",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Details section with improved spacing
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = listing.breed,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Neutral900,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    InfoChip(
+                        icon = Icons.Default.AccessTime,
+                        text = listing.age
+                    )
+                    InfoChip(
+                        icon = Icons.Default.LocationOn,
+                        text = listing.location
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // View Details CTA
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "View Details",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Primary700,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.ArrowForward,
+                        contentDescription = "View details",
+                        tint = Primary700,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
     }
 }
+
+@Composable
+fun InfoChip(
+    icon: ImageVector,
+    text: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = Neutral700
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = Neutral700
+        )
+    }
+}
+
+// Keep all other existing functions (SnapScrollListings, EnhancedLazyColumnListings, etc.)
+// They can remain as alternatives
 
 // OPTION 1: VerticalPager with SNAP SCROLLING - Always shows full tiles
 @OptIn(ExperimentalFoundationApi::class)

@@ -16,7 +16,8 @@ import androidx.compose.ui.graphics.Color
 val HerdmatDeepGreen = Color(0xFF013B33) // Main brand color
 val HerdmatGoldLegacy = Color(0xFFFFD700) // Premium accent
 val HerdmatTeallegacy = Color(0xFF00A896) // Interactive elements
-
+val HerdmatGold = Color(0xFFFFD700)
+val HerdmatTealGreen = Color(0xFF00A896)
 // Semantic Colors
 val SuccessGreen = Color(0xFF4CAF50) // Success states, active indicators
 val WarningOrange = Color(0xFFFF6F00) // Warnings, important actions
@@ -56,6 +57,16 @@ val TierFree = SuccessGreen
 val TierBasic = InfoBlue
 val TierBulk = WarningOrange
 val TierPremium = HerdmatGold
+
+@Composable
+fun getTierColor(tier: Tier): Color {
+    return when (tier) {
+        ListingTier.FREE -> SuccessGreen
+        ListingTier.BASIC -> InfoBlue
+        ListingTier.BULK -> WarningOrange
+        ListingTier.PREMIUM -> HerdmatGold
+    }
+}
 
 // Message Colors
 val MessageSent = HerdmatDeepGreen
