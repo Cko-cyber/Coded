@@ -28,13 +28,15 @@ import com.example.coded.data.*
 import com.example.coded.ui.theme.*
 import com.example.coded.viewmodels.ListingsViewModel
 import kotlinx.coroutines.delay
-import androidx.compose.foundation.pullRefresh
-import androidx.compose.foundation.pullRefreshState
-import androidx.compose.foundation.rememberPullRefreshState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ListingsScreenWithRefresh(
+fun ListingsScreen(
     navController: NavController,
     authRepository: AuthRepository
 ) {
@@ -46,19 +48,6 @@ fun ListingsScreenWithRefresh(
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(ListingFilter.ALL) }
     var isRefreshing by remember { mutableStateOf(false) }
-
-    val pullRefreshState = rememberPullRefreshState(
-        refreshing = isRefreshing,
-        onRefresh = {
-            isRefreshing = true
-            listingsViewModel.loadListings()
-            // Simulate network delay
-            LaunchedEffect(Unit) {
-                delay(1000)
-                isRefreshing = false
-            }
-        }
-    )
 
     // Filter listings based on search and filter
     val filteredListings = remember(listings, searchQuery, selectedFilter) {
@@ -94,13 +83,24 @@ fun ListingsScreenWithRefresh(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                listingsViewModel.loadListings()
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .pullRefresh(pullRefreshState)
                 .background(Neutral50)
         ) {
+            // Reset refreshing after listing loads
+            LaunchedEffect(isLoading) {
+                if (!isLoading && isRefreshing) {
+                    delay(500)
+                    isRefreshing = false
+                }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -192,7 +192,7 @@ fun ListingsScreenWithRefresh(
                                 Icons.Default.Error,
                                 contentDescription = "Error",
                                 modifier = Modifier.size(64.dp),
-                                tint = ErrorRed
+                                tint = Error
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
@@ -273,14 +273,6 @@ fun ListingsScreenWithRefresh(
                     }
                 }
             }
-
-            PullRefreshIndicator(
-                refreshing = isRefreshing,
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter),
-                backgroundColor = Surface,
-                contentColor = Primary700
-            )
         }
     }
 }
@@ -336,12 +328,12 @@ fun ModernListingCard(
                                 Icons.Default.Pets,
                                 contentDescription = "No Image",
                                 modifier = Modifier.size(48.dp),
-                                tint = Neutral600
+                                tint = Neutral700
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "No Image Available",
-                                color = Neutral600
+                                color = Neutral700
                             )
                         }
                     }
@@ -512,8 +504,8 @@ fun InfoChip(
     }
 }
 
-// Keep all other existing functions (SnapScrollListings, EnhancedLazyColumnListings, etc.)
-// They can remain as alternatives
+// Helper function for tier colors
+
 
 // OPTION 1: VerticalPager with SNAP SCROLLING - Always shows full tiles
 @OptIn(ExperimentalFoundationApi::class)

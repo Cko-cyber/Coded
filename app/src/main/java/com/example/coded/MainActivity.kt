@@ -22,7 +22,7 @@ import com.example.coded.managers.NotificationManager
 import com.example.coded.managers.NotificationService
 import com.example.coded.navigation.NavGraph
 import com.example.coded.services.MyFirebaseMessagingService
-import com.example.coded.ui.theme.CodedTheme
+import com.example.coded.ui.theme.HerdmatTheme
 import com.example.coded.utils.NotificationPermissionHelper
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            CodedTheme {
+            HerdmatTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

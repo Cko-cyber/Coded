@@ -1,6 +1,7 @@
 package com.example.coded.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -566,6 +567,32 @@ fun PremiumListingCard(
                     )
                 }
             }
+        }
+    }
+}@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun PremiumListingsCarousel(
+    listings: List<Listing>,
+    navController: NavController
+) {
+    val pagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { listings.size }
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            PremiumListingCard(
+                listing = listings[page],
+                navController = navController
+            )
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
+import com.example.coded.data.ListingTier
 
 /**
  * 🎨 HERDMAT MODERN COLOR SYSTEM
@@ -18,6 +19,7 @@ val HerdmatGoldLegacy = Color(0xFFFFD700) // Premium accent
 val HerdmatTeallegacy = Color(0xFF00A896) // Interactive elements
 val HerdmatGold = Color(0xFFFFD700)
 val HerdmatTealGreen = Color(0xFF00A896)
+
 // Semantic Colors
 val SuccessGreen = Color(0xFF4CAF50) // Success states, active indicators
 val WarningOrange = Color(0xFFFF6F00) // Warnings, important actions
@@ -59,7 +61,7 @@ val TierBulk = WarningOrange
 val TierPremium = HerdmatGold
 
 @Composable
-fun getTierColor(tier: Tier): Color {
+fun getTierColor(tier: ListingTier): Color {
     return when (tier) {
         ListingTier.FREE -> SuccessGreen
         ListingTier.BASIC -> InfoBlue
@@ -79,3 +81,56 @@ val Pressed = Color(0x1A000000) // 10% black overlay
 val Focused = Color(0x1F000000) // 12% black overlay
 val Hovered = Color(0x0A000000) // 4% black overlay
 val Dragged = Color(0x14000000) // 8% black overlay
+
+// Material3 Theme Configuration
+private val DarkColorScheme = darkColorScheme(
+    primary = HerdmatDeepGreen,
+    secondary = HerdmatGold,
+    tertiary = HerdmatTealGreen,
+    background = NeutralGray900,
+    surface = NeutralGray800,
+    error = ErrorRed,
+    onPrimary = NeutralWhite,
+    onSecondary = NeutralBlack,
+    onTertiary = NeutralWhite,
+    onBackground = NeutralWhite,
+    onSurface = NeutralWhite,
+    onError = NeutralWhite
+)
+
+private val LightColorScheme = lightColorScheme(
+    primary = HerdmatDeepGreen,
+    secondary = HerdmatGold,
+    tertiary = HerdmatTealGreen,
+    background = NeutralGray50,
+    surface = NeutralWhite,
+    error = ErrorRed,
+    onPrimary = NeutralWhite,
+    onSecondary = NeutralBlack,
+    onTertiary = NeutralWhite,
+    onBackground = NeutralBlack,
+    onSurface = NeutralBlack,
+    onError = NeutralWhite
+)
+
+@Composable
+fun HerdmatTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        content = content
+    )
+}

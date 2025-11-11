@@ -186,7 +186,6 @@ fun CreateListingScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Surface(
-                                color = getTierColor(uiState.tier),
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
@@ -401,7 +400,7 @@ fun TierSelectionDialog(
                             }
 
                             Surface(
-                                color = getTierColor(tier),
+
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Text(
@@ -429,7 +428,9 @@ fun TierSelectionDialog(
     )
 }
 
-// SINGLE DEFINITIONS - Remove duplicates below this line
+// REMOVE THE DUPLICATE FUNCTION DEFINITIONS BELOW THIS LINE
+// Keep only one copy of each function:
+
 fun getTierCost(tier: ListingTier): Int {
     return when (tier) {
         ListingTier.FREE -> 0

@@ -1,11 +1,14 @@
 package com.example.coded.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.coded.ui.theme.*
 
 // Primary Button
 @Composable
@@ -45,7 +48,9 @@ fun HerdmatCard(
 ) {
     val cardModifier = if (onClick != null) {
         modifier.clickable(onClick = onClick)
-    } else modifier
+    } else {
+        modifier
+    }
 
     Card(
         modifier = cardModifier,

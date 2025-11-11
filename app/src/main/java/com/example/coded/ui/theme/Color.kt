@@ -16,6 +16,7 @@ val Accent500 = Color(0xFFFFA726) // Light orange
 // Neutral Colors
 val Neutral900 = Color(0xFF212121)
 val Neutral700 = Color(0xFF424242)
+val Neutral600 = Color(0xFF757575)
 val Neutral500 = Color(0xFF757575)
 val Neutral300 = Color(0xFFBDBDBD)
 val Neutral100 = Color(0xFFF5F5F5)
