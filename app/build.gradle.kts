@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     kotlin("plugin.serialization") version "1.9.0"
     id("com.google.gms.google-services")
+    id("com.google.dagger.hilt.android") version "2.51.1"
+    id("kotlin-kapt")
 }
 
 android {
@@ -77,6 +79,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.core:core:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
+    // HILT – MUST HAVE BOTH
+    implementation("com.google.dagger:hilt-android:2.51.1")
+    kapt("com.google.dagger:hilt-android-compiler:2.51.1")
 
     // Other UI dependencies
     implementation("io.coil-kt:coil-compose:2.4.0")
@@ -84,7 +89,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("com.google.android.material:material:1.10.0")
-
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
     // Accompanist
     implementation("com.google.accompanist:accompanist-pager:0.32.0")
     implementation("com.google.accompanist:accompanist-pager-indicators:0.32.0")
@@ -115,7 +120,11 @@ dependencies {
 
     // Add desugaring for newer Java features
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    implementation ("com.google.dagger:hilt-android:2.51.1")
 
+    // ViewModel + Lifecycle
+    implementation ("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")
+    implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     // Test dependencies
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

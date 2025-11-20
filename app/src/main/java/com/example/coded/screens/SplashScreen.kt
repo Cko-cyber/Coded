@@ -14,43 +14,35 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.coded.R
+import com.example.coded.data.AuthRepository
 import com.example.coded.navigation.Screen
 import kotlinx.coroutines.delay
 
 @Composable
-fun SplashScreen(navController: NavController) {
-    var logoVisible by remember { mutableStateOf(false) }
-    var poweredByVisible by remember { mutableStateOf(false) }
+fun SplashScreen(
+    navController: NavController,
+    authRepository: AuthRepository
+) {
+    val currentUser by authRepository.currentUser.collectAsState()
 
     val logoScale by animateFloatAsState(
-        targetValue = if (logoVisible) 1f else 0.3f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ), label = "logo_scale"
+        targetValue = 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label = "logo_scale"
     )
-
-    val logoAlpha by animateFloatAsState(
-        targetValue = if (logoVisible) 1f else 0f,
-        animationSpec = tween(800), label = "logo_alpha"
-    )
-
-    val poweredByAlpha by animateFloatAsState(
-        targetValue = if (poweredByVisible) 1f else 0f,
-        animationSpec = tween(600), label = "powered_alpha"
-    )
+    val logoAlpha by animateFloatAsState(targetValue = 1f, animationSpec = tween(800), label = "logo_alpha")
+    val poweredByAlpha by animateFloatAsState(targetValue = 1f, animationSpec = tween(600), label = "powered_alpha")
 
     LaunchedEffect(Unit) {
-        logoVisible = true
-        delay(1500)
-        poweredByVisible = true
-        delay(1500)
-        // CHANGED: Navigate to Login for testing
-        navController.navigate(Screen.Login.route) {
+        delay(3000)
+        val route = if (currentUser != null) Screen.MainHome.route else Screen.Login.route
+        navController.navigate(route) {
             popUpTo(Screen.Splash.route) { inclusive = true }
         }
     }
@@ -58,7 +50,8 @@ fun SplashScreen(navController: NavController) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF013B33)),
+            .background(Color(0xFF013B33))
+            .semantics { contentDescription = "Herdmat splash screen" },
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -81,6 +74,7 @@ fun SplashScreen(navController: NavController) {
                     contentDescription = "Herdmat Logo",
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
+                        .aspectRatio(1f)
                         .scale(logoScale)
                         .alpha(logoAlpha),
                     contentScale = ContentScale.Fit
