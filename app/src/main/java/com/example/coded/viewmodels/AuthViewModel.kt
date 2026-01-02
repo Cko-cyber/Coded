@@ -8,14 +8,12 @@ import com.example.coded.data.AuthRepository
 import com.example.coded.data.AuthResult
 import com.example.coded.data.VerificationState
 import com.google.firebase.auth.FirebaseUser
-import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class AuthViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+class AuthViewModel(
+    private val authRepository: AuthRepository = AuthRepository()
 ) : ViewModel() {
 
     // Expose repository flows directly (clean & reactive)
@@ -49,17 +47,31 @@ class AuthViewModel @Inject constructor(
     private val _otpCode = MutableStateFlow("")
     val otpCode: StateFlow<String> = _otpCode.asStateFlow()
 
+    // ✅ ADDED: Missing OTP state
+    private val _isOtpSent = MutableStateFlow(false)
+    val isOtpSent: StateFlow<Boolean> = _isOtpSent.asStateFlow()
+
+    // ✅ ADDED: Missing countdown state
+    private val _countdown = MutableStateFlow(0)
+    val countdown: StateFlow<Int> = _countdown.asStateFlow()
+
     // UI State
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
-
-    private val _countdown = MutableStateFlow(0)
-    val countdown: StateFlow<Int> = _countdown.asStateFlow()
 
     // Full name for convenience
     val fullName: StateFlow<String> = combine(_firstName, _lastName) { first, last ->
         "$first $last".trim()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), "")
+
+    // Listen to verification state changes to update isOtpSent
+    init {
+        viewModelScope.launch {
+            verificationState.collect { state ->
+                _isOtpSent.value = state is VerificationState.CodeSent
+            }
+        }
+    }
 
     // Update functions
     fun updateEmail(value: String) { _email.value = value }
@@ -71,8 +83,20 @@ class AuthViewModel @Inject constructor(
     fun updateLocation(value: String) { _location.value = value.trim() }
     fun updateOtpCode(value: String) { _otpCode.value = value }
 
+    // ✅ ADDED: clearState method (used by screens)
+    fun clearState() {
+        _uiState.value = AuthUiState.Idle
+    }
+
     fun clearUiState() {
         _uiState.value = AuthUiState.Idle
+    }
+
+    // ✅ ADDED: resetOtp method
+    fun resetOtp() {
+        _otpCode.value = ""
+        _isOtpSent.value = false
+        _countdown.value = 0
     }
 
     fun resetOtpFields() {
@@ -80,18 +104,19 @@ class AuthViewModel @Inject constructor(
         _countdown.value = 0
     }
 
+    // ✅ ADDED: startCountdown method
     fun startCountdown() {
         _countdown.value = 60
         viewModelScope.launch {
             while (_countdown.value > 0) {
-                kotlinx.coroutines.delay(1000)
+                delay(1000)
                 _countdown.value -= 1
             }
         }
     }
 
-    // Validation
-    fun isSignUpFormValid(): Boolean {
+    // ✅ ADDED: Validation methods
+    fun isSignUpValid(): Boolean {
         return _firstName.value.isNotBlank() &&
                 _lastName.value.isNotBlank() &&
                 _phoneNumber.value.length == 8 &&
@@ -99,6 +124,10 @@ class AuthViewModel @Inject constructor(
                 _location.value.isNotBlank() &&
                 _password.value.length >= 6 &&
                 _password.value == _confirmPassword.value
+    }
+
+    fun isSignUpFormValid(): Boolean {
+        return isSignUpValid()
     }
 
     fun isLoginFormValid(): Boolean {
@@ -110,6 +139,7 @@ class AuthViewModel @Inject constructor(
     fun sendOtp(activity: Activity) {
         val fullPhoneNumber = "+268${_phoneNumber.value}"
         authRepository.sendPhoneVerification(fullPhoneNumber, activity)
+        _isOtpSent.value = true
     }
 
     fun resendOtp(activity: Activity) {
@@ -136,8 +166,9 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun signUpWithEmail() {
-        if (!isSignUpFormValid()) {
+    // ✅ ADDED: signUp method (email/password signup)
+    fun signUp() {
+        if (!isSignUpValid()) {
             _uiState.value = AuthUiState.Error("Please fill all fields correctly")
             return
         }
@@ -148,7 +179,7 @@ class AuthViewModel @Inject constructor(
                 email = _email.value,
                 password = _password.value,
                 mobile_number = "+268${_phoneNumber.value}",
-                full_name = fullName.value,
+                full_name = "${_firstName.value} ${_lastName.value}".trim(),
                 location = _location.value
             )) {
                 AuthResult.Success -> _uiState.value = AuthUiState.Success
@@ -157,6 +188,11 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    fun signUpWithEmail() {
+        signUp()
+    }
+
+    // ✅ ADDED: loginWithEmail method
     fun loginWithEmail() {
         if (!isLoginFormValid()) {
             _uiState.value = AuthUiState.Error("Invalid email or password")
@@ -192,6 +228,7 @@ class AuthViewModel @Inject constructor(
         _location.value = ""
         _otpCode.value = ""
         _countdown.value = 0
+        _isOtpSent.value = false
     }
 
     // Helper

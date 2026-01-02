@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import coil.compose.AsyncImage
 import com.example.coded.data.AuthRepository
 import com.example.coded.data.Listing
@@ -41,6 +42,67 @@ fun MainHomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    // Real-time notification counts
+    var unreadMessageCount by remember { mutableStateOf(0) }
+    var unreadNotificationCount by remember { mutableStateOf(0) }
+
+    val firestore = remember { com.google.firebase.firestore.FirebaseFirestore.getInstance() }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Real-time listener for unread messages
+    DisposableEffect(currentUser?.id) {
+        var messageListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+        currentUser?.id?.let { userId ->
+            messageListener = firestore.collection("conversations")
+                .whereArrayContains("participants", userId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error == null && snapshot != null) {
+                        var totalUnread = 0
+                        snapshot.documents.forEach { doc ->
+                            val unreadMap = doc.get("unreadCount") as? Map<String, Long>
+                            totalUnread += (unreadMap?.get(userId)?.toInt() ?: 0)
+                        }
+                        unreadMessageCount = totalUnread
+                    }
+                }
+        }
+
+        onDispose {
+            messageListener?.remove()
+        }
+    }
+
+    // Real-time listener for unread notifications
+    DisposableEffect(currentUser?.id) {
+        var notificationListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+        currentUser?.id?.let { userId ->
+            notificationListener = firestore.collection("notifications")
+                .whereEqualTo("userId", userId)
+                .whereEqualTo("isRead", false)
+                .addSnapshotListener { snapshot, error ->
+                    if (error == null && snapshot != null) {
+                        unreadNotificationCount = snapshot.documents.size
+                    }
+                }
+        }
+
+        onDispose {
+            notificationListener?.remove()
+        }
+    }
+
+    // Auto-refresh listings every time screen comes to foreground
+    LaunchedEffect(Unit) {
+        viewModel.loadListings()
+    }
+
+    // Get current route for bottom nav highlighting
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
         topBar = {
@@ -51,17 +113,153 @@ fun MainHomeScreen(
                     titleContentColor = Color.White
                 ),
                 actions = {
+                    // Notifications icon with badge
+                    IconButton(onClick = { navController.navigate("notifications") }) {
+                        BadgedBox(
+                            badge = {
+                                Badge(
+                                    containerColor = Color(0xFFFF6F00)
+                                ) {
+                                    Text("3", color = Color.White)
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Notifications, "Notifications", tint = Color.White)
+                        }
+                    }
+
                     IconButton(onClick = { showLogoutDialog = true }) {
                         Icon(Icons.Default.Logout, "Logout", tint = Color.White)
                     }
                 }
             )
         },
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color.White,
+                tonalElevation = 8.dp
+            ) {
+                // Home
+                NavigationBarItem(
+                    selected = currentRoute == "main_home",
+                    onClick = { navController.navigate("main_home") },
+                    icon = {
+                        Icon(
+                            if (currentRoute == "main_home") Icons.Filled.Home else Icons.Default.Home,
+                            contentDescription = "Home"
+                        )
+                    },
+                    label = { Text("Home") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFF013B33),
+                        selectedTextColor = Color(0xFF013B33),
+                        indicatorColor = Color(0xFF013B33).copy(alpha = 0.1f)
+                    )
+                )
+
+                // Listings
+                NavigationBarItem(
+                    selected = currentRoute == "listings",
+                    onClick = { navController.navigate("listings") },
+                    icon = {
+                        Icon(
+                            if (currentRoute == "listings") Icons.Filled.List else Icons.Default.List,
+                            contentDescription = "Listings"
+                        )
+                    },
+                    label = { Text("Browse") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFF013B33),
+                        selectedTextColor = Color(0xFF013B33),
+                        indicatorColor = Color(0xFF013B33).copy(alpha = 0.1f)
+                    )
+                )
+
+                // Create Listing (Center FAB-style)
+                NavigationBarItem(
+                    selected = currentRoute == "create_listing",
+                    onClick = { navController.navigate("create_listing") },
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .offset(y = (-8).dp)
+                                .background(Color(0xFFFF6F00), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = "Create",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    },
+                    label = { Text("Create") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFFFF6F00),
+                        selectedTextColor = Color(0xFFFF6F00),
+                        indicatorColor = Color.Transparent
+                    )
+                )
+
+                // Messages
+                NavigationBarItem(
+                    selected = currentRoute == "messages",
+                    onClick = { navController.navigate("messages") },
+                    icon = {
+                        BadgedBox(
+                            badge = {
+                                Badge(
+                                    containerColor = Color(0xFFFF6F00)
+                                ) {
+                                    Text("2", color = Color.White)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                if (currentRoute == "messages") Icons.Filled.Chat else Icons.Default.Chat,
+                                contentDescription = "Messages"
+                            )
+                        }
+                    },
+                    label = { Text("Messages") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFF013B33),
+                        selectedTextColor = Color(0xFF013B33),
+                        indicatorColor = Color(0xFF013B33).copy(alpha = 0.1f)
+                    )
+                )
+
+                // Profile
+                NavigationBarItem(
+                    selected = currentRoute == "profile",
+                    onClick = { navController.navigate("profile") },
+                    icon = {
+                        Icon(
+                            if (currentRoute == "profile") Icons.Filled.Person else Icons.Default.Person,
+                            contentDescription = "Profile"
+                        )
+                    },
+                    label = { Text("Profile") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color(0xFF013B33),
+                        selectedTextColor = Color(0xFF013B33),
+                        indicatorColor = Color(0xFF013B33).copy(alpha = 0.1f)
+                    )
+                )
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         when (uiState) {
             is ListingsUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(color = Color(0xFF013B33))
                 }
             }
@@ -76,6 +274,13 @@ fun MainHomeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
+                        Icon(
+                            Icons.Default.Pets,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             "No listings available yet",
                             color = Color.Gray,
@@ -83,9 +288,11 @@ fun MainHomeScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
-                            onClick = { navController.navigate(Screen.CreateListing.route) },
+                            onClick = { navController.navigate("create_listing") },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF013B33))
                         ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text("Create First Listing")
                         }
                     }
@@ -103,6 +310,13 @@ fun MainHomeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
+                        Icon(
+                            Icons.Default.Error,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = Color.Red
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = errorMessage,
                             color = Color.Red,
@@ -131,16 +345,62 @@ fun MainHomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
+                        .background(Color(0xFFF5F5F5))
                 ) {
+                    // Welcome Header
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF013B33),
+                        shadowElevation = 4.dp
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = "Welcome back, ${currentUser?.full_name?.split(" ")?.first() ?: "User"}!",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Find the perfect livestock for your farm",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+
                     // Premium carousel at top
                     if (premiumListings.isNotEmpty()) {
-                        PremiumListingsCarousel(premiumListings, navController)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Featured Listings",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = Color(0xFF013B33)
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
+                        PremiumListingsCarousel(premiumListings, navController)
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
 
                     // Regular listings
                     if (regularListings.isNotEmpty()) {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            text = "All Listings",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = Color(0xFF013B33)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
                             items(regularListings) { listing ->
                                 HerdmatCard(listing = listing, navController = navController)
                             }
@@ -150,7 +410,18 @@ fun MainHomeScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("No listings available", color = Color.Gray)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.Pets,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = Color.Gray
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("No listings available", color = Color.Gray)
+                            }
                         }
                     }
                 }
@@ -158,20 +429,32 @@ fun MainHomeScreen(
         }
     }
 
+    // Logout Dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.Logout,
+                    contentDescription = null,
+                    tint = Color(0xFF013B33),
+                    modifier = Modifier.size(48.dp)
+                )
+            },
             title = { Text("Logout") },
             text = { Text("Are you sure you want to logout?") },
             confirmButton = {
-                TextButton(onClick = {
-                    FirebaseAuth.getInstance().signOut()
-                    authRepository.signOut()
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }) {
-                    Text("Logout", color = Color.Red)
+                Button(
+                    onClick = {
+                        FirebaseAuth.getInstance().signOut()
+                        authRepository.signOut()
+                        navController.navigate("login") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Logout")
                 }
             },
             dismissButton = {
@@ -191,8 +474,16 @@ fun PremiumListingsCarousel(
 ) {
     val pagerState = rememberPagerState(pageCount = { listings.size })
 
-    Box(modifier = Modifier.fillMaxWidth().height(280.dp)) {
-        HorizontalPager(state = pagerState) { page ->
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(280.dp)
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(horizontal = 32.dp),
+            pageSpacing = 16.dp
+        ) { page ->
             PremiumListingCard(listing = listings[page], navController = navController)
         }
 
@@ -222,10 +513,10 @@ fun PremiumListingCard(listing: Listing, navController: NavController) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
             .clickable { navController.navigate("single_stock/${listing.id}") },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(8.dp)
     ) {
         Box {
             // Image
@@ -246,7 +537,12 @@ fun PremiumListingCard(listing: Listing, navController: NavController) {
                         .background(Color.LightGray),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No Image", color = Color.Gray)
+                    Icon(
+                        Icons.Default.Pets,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = Color.Gray
+                    )
                 }
             }
 
@@ -270,7 +566,9 @@ fun PremiumListingCard(listing: Listing, navController: NavController) {
             Text(
                 text = listing.breed,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = listing.location,
@@ -279,7 +577,8 @@ fun PremiumListingCard(listing: Listing, navController: NavController) {
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = listing.getDisplayPrice(),
@@ -289,6 +588,7 @@ fun PremiumListingCard(listing: Listing, navController: NavController) {
                 )
                 Text(
                     text = "Age: ${listing.age}",
+                    style = MaterialTheme.typography.bodySmall,
                     color = Color.Gray
                 )
             }

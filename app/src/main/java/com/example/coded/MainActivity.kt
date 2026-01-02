@@ -39,13 +39,11 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "MainActivity"
     }
 
-    // Store navController as a class variable for onNewIntent
     private var navController: NavController? = null
 
     private lateinit var notificationManager: NotificationManager
     private lateinit var notificationService: NotificationService
 
-    // Register for notification permission result
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -65,19 +63,15 @@ class MainActivity : ComponentActivity() {
         Log.d(TAG, "🚀 MainActivity onCreate()")
         Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-        // ✅ STEP 1: Check Google Play Services
         checkPlayServices()
 
-        // Initialize notification managers
         notificationManager = NotificationManager(this)
         notificationService = NotificationService()
 
-        // ✅ STEP 2: Request notification permission
         requestNotificationPermission()
 
-        // ✅ STEP 3: Force FCM token retrieval after delay
         lifecycleScope.launch {
-            delay(3000) // Wait 3 seconds for Firebase to initialize
+            delay(3000)
 
             val currentUser = FirebaseAuth.getInstance().currentUser
             if (currentUser != null) {
@@ -97,10 +91,8 @@ class MainActivity : ComponentActivity() {
                     val rememberedNavController = rememberNavController()
                     val authRepository = remember { AuthRepository() }
 
-                    // Store the navController in class variable
                     navController = rememberedNavController
 
-                    // ✅ Handle deep links from notifications
                     LaunchedEffect(Unit) {
                         handleDeepLink(intent, rememberedNavController)
                     }
@@ -114,11 +106,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+
+
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
 
-        // Handle deep link when app is already running
         intent?.let {
             Log.d(TAG, "🔗 New intent received: ${it.action}")
             navController?.let { controller ->
@@ -127,15 +120,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * ✅ DEEP LINK HANDLER
-     * Routes user to correct screen based on notification type
-     */
     private fun handleDeepLink(intent: Intent?, navController: NavController) {
         intent ?: return
 
         when (intent.action) {
-            // MESSAGE NOTIFICATION → Chat Screen (NOT Messages screen)
             MyFirebaseMessagingService.ACTION_OPEN_MESSAGES -> {
                 val conversationId = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_CONVERSATION_ID)
                 val senderId = intent.getStringExtra("senderId")
@@ -143,19 +131,16 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "📨 Opening chat: senderId=$senderId")
 
                 if (!senderId.isNullOrBlank()) {
-                    // Navigate directly to chat screen with the sender
                     navController.navigate("chat/$senderId/null") {
                         popUpTo("main_home") { inclusive = false }
                     }
                 } else {
-                    // Fallback to messages screen if no senderId
                     navController.navigate("messages") {
                         popUpTo("main_home") { inclusive = false }
                     }
                 }
             }
 
-            // BOOKING NOTIFICATION → Booking Details Screen
             MyFirebaseMessagingService.ACTION_OPEN_BOOKING_DETAILS -> {
                 val listingId = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_LISTING_ID)
                 val bookingType = intent.getStringExtra(MyFirebaseMessagingService.EXTRA_BOOKING_TYPE)
@@ -176,7 +161,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // GENERAL NOTIFICATION → Notifications Screen
             MyFirebaseMessagingService.ACTION_OPEN_NOTIFICATIONS -> {
                 Log.d(TAG, "🔔 Opening notifications screen")
 
@@ -187,9 +171,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * ✅ CHECK IF GOOGLE PLAY SERVICES IS AVAILABLE
-     */
     private fun checkPlayServices(): Boolean {
         val apiAvailability = GoogleApiAvailability.getInstance()
         val resultCode = apiAvailability.isGooglePlayServicesAvailable(this)
@@ -212,16 +193,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * ✅ FORCE FCM TOKEN RETRIEVAL WITH COMPREHENSIVE LOGGING
-     */
     private fun forceFCMTokenRetrieval(userId: String) {
         Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         Log.d(TAG, "🔑 FORCING FCM TOKEN RETRIEVAL")
         Log.d(TAG, "   User ID: $userId")
         Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-        // ✅ Method 1: Using addOnCompleteListener
         FirebaseMessaging.getInstance().token
             .addOnCompleteListener { task ->
                 Log.d(TAG, "📋 FCM Token Task Completed")
@@ -242,7 +219,6 @@ class MainActivity : ComponentActivity() {
                             Log.d(TAG, "   First 50 chars: ${token.take(50)}...")
                             Log.d(TAG, "   Last 30 chars: ...${token.takeLast(30)}")
 
-                            // ✅ SAVE IT!
                             saveFCMTokenToFirestore(userId, token)
                         }
                     }
@@ -269,7 +245,6 @@ class MainActivity : ComponentActivity() {
                 exception.printStackTrace()
             }
 
-        // ✅ Method 2: Using coroutines as backup
         lifecycleScope.launch {
             try {
                 Log.d(TAG, "🔄 Trying coroutine method...")
@@ -328,9 +303,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * ✅ SAVE FCM TOKEN TO FIRESTORE WITH VERIFICATION
-     */
     private fun saveFCMTokenToFirestore(userId: String, token: String) {
         val userRef = FirebaseFirestore.getInstance()
             .collection("users")
@@ -362,7 +334,6 @@ class MainActivity : ComponentActivity() {
                         .addOnFailureListener { e ->
                             Log.e(TAG, "❌ Update failed: ${e.message}")
 
-                            // Fallback: set with merge
                             val userData = document.data?.toMutableMap() ?: mutableMapOf()
                             userData["fcm_token"] = token
                             userData["updated_at"] = com.google.firebase.Timestamp.now()
@@ -402,13 +373,10 @@ class MainActivity : ComponentActivity() {
             }
     }
 
-    /**
-     * ✅ VERIFY TOKEN WAS SAVED - WITH DELAY
-     */
     private fun verifyFCMTokenSave(userId: String) {
         lifecycleScope.launch {
             try {
-                delay(2000) // Wait 2 seconds before verifying
+                delay(2000)
 
                 val userRef = FirebaseFirestore.getInstance()
                     .collection("users")
@@ -460,7 +428,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
-        permissions: Array<out String>,
+        permissions: Array<String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
