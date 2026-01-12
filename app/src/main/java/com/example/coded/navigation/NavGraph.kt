@@ -1,5 +1,6 @@
 package com.example.coded.navigation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,10 @@ import com.example.coded.screens.LoginScreen
 import com.example.coded.screens.client.CreateJobScreen
 import com.example.coded.screens.admin.AdminDashboardScreen
 import com.example.coded.screens.provider.SuggestedJobsScreen
+import com.example.coded.ui.theme.OasisGreen
+import com.example.coded.ui.theme.OasisGreenDark
+import com.example.coded.ui.theme.OasisGreenLight
+import com.example.coded.ui.theme.OasisGold
 import kotlin.random.Random
 
 @Composable
@@ -41,17 +46,14 @@ fun OasisNavGraph(
             MainEntryScreen(navController = navController, authRepository = authRepository)
         }
 
-        // Guest/Client flow - CREATE JOB (no parameters needed)
         composable("client/create_job") {
             CreateJobScreen(navController)
         }
 
-        // Guest home screen
         composable("guest/home") {
             GuestHomeScreen(navController)
         }
 
-        // Provider flow
         composable("provider/home") {
             ProviderHomeScreen(navController)
         }
@@ -60,12 +62,10 @@ fun OasisNavGraph(
             SuggestedJobsScreen(navController)
         }
 
-        // Admin flow
         composable("admin/dashboard") {
             AdminDashboardScreen(navController)
         }
 
-        // PAYMENT FLOW
         composable("pay_for_job/{tempTransactionId}/{tempJobId}/{totalPrice}") { backStackEntry ->
             PaymentScreen(
                 navController = navController,
@@ -75,7 +75,6 @@ fun OasisNavGraph(
             )
         }
 
-        // JOB DETAILS - After successful payment
         composable("job_details/{finalTransactionId}/{finalJobId}") { backStackEntry ->
             JobDetailsScreen(
                 navController = navController,
@@ -88,74 +87,111 @@ fun OasisNavGraph(
 
 @Composable
 fun GuestHomeScreen(navController: NavHostController) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(OasisGreen)
     ) {
-        Text(
-            "Welcome to Oasis! 🏝️",
-            style = MaterialTheme.typography.titleLarge,
-            color = Color(0xFF2E7D32)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Get services anonymously",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray
-        )
-        Spacer(modifier = Modifier.height(32.dp))
-        Button(
-            onClick = { navController.navigate("client/create_job") },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF2E7D32)
-            ),
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Create Service Request (Free to Post)")
+            Text(
+                "Welcome to Oasis! 🏝️",
+                style = MaterialTheme.typography.headlineLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Get services anonymously",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White.copy(alpha = 0.9f)
+            )
+            Spacer(modifier = Modifier.height(48.dp))
+
+            Button(
+                onClick = { navController.navigate("client/create_job") },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = OasisGold,
+                    contentColor = OasisGreenDark
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text(
+                    "Create Service Request (Free to Post)",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                "No account needed • Pay only when job is accepted",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.8f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            "No account needed • Pay only when job is accepted",
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.Gray,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
     }
 }
 
 @Composable
 fun ProviderHomeScreen(navController: NavHostController) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(OasisGreen)
     ) {
-        Text(
-            "Welcome Provider! 👷",
-            style = MaterialTheme.typography.titleLarge,
-            color = Color(0xFF2E7D32)
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = { navController.navigate("provider/suggested_jobs") },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF2E7D32)
-            ),
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("View Available Jobs")
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedButton(
-            onClick = { navController.popBackStack() },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Logout")
+            Text(
+                "Welcome Provider! 👷",
+                style = MaterialTheme.typography.headlineLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(48.dp))
+
+            Button(
+                onClick = { navController.navigate("provider/suggested_jobs") },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = OasisGold,
+                    contentColor = OasisGreenDark
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text("View Available Jobs", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = { navController.popBackStack() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color.White
+                ),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(Color.White)
+                )
+            ) {
+                Text("Logout", fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -173,48 +209,49 @@ fun PaymentScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(OasisGreenLight)
             .padding(16.dp)
     ) {
         Text(
             "Complete Payment",
-            style = MaterialTheme.typography.titleLarge,
-            color = Color(0xFF2E7D32)
+            style = MaterialTheme.typography.headlineMedium,
+            color = OasisGreenDark,
+            fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             "Job will be activated after payment",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = Color.Gray
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Order Summary
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFFF5F5F5)
-            )
+                containerColor = Color.White
+            ),
+            elevation = CardDefaults.cardElevation(4.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Order Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Order Summary", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Temporary Job ID:", style = MaterialTheme.typography.bodyMedium)
-                    Text(tempJobId.take(12) + "...", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                    Text("Temporary Job ID:", style = MaterialTheme.typography.bodyLarge)
+                    Text(tempJobId.take(12) + "...", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Total Amount:", style = MaterialTheme.typography.bodyMedium)
-                    Text("E$totalPrice", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                    Text("Total Amount:", style = MaterialTheme.typography.bodyLarge)
+                    Text("E$totalPrice", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = OasisGreenDark)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Payment Methods
-        Text("Select Payment Method:", style = MaterialTheme.typography.titleMedium)
+        Text("Select Payment Method:", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = OasisGreenDark)
         Spacer(modifier = Modifier.height(12.dp))
 
         val paymentMethods = listOf(
@@ -230,16 +267,21 @@ fun PaymentScreen(
                     onClick = { paymentMethod = method },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (paymentMethod == method) Color(0xFFE8F5E9) else Color.White
-                    )
+                        containerColor = if (paymentMethod == method) OasisGreenLight else Color.White
+                    ),
+                    border = if (paymentMethod == method)
+                        CardDefaults.outlinedCardBorder().copy(
+                            brush = androidx.compose.ui.graphics.SolidColor(OasisGreen)
+                        )
+                    else null
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(icon, style = MaterialTheme.typography.titleLarge)
+                        Text(icon, style = MaterialTheme.typography.headlineMedium)
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(method, style = MaterialTheme.typography.bodyMedium)
+                        Text(method, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
@@ -247,12 +289,9 @@ fun PaymentScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Pay Button - FIXED the condition
         Button(
             onClick = {
                 isProcessing = true
-                // Simulate payment processing
-                // After successful payment, generate FINAL transaction and job IDs
                 android.os.Handler().postDelayed({
                     val finalTransactionId = "txn_final_${System.currentTimeMillis()}_${Random.nextInt(10000, 99999)}"
                     val finalJobId = "job_final_${System.currentTimeMillis()}_${Random.nextInt(10000, 99999)}"
@@ -265,7 +304,7 @@ fun PaymentScreen(
                 .fillMaxWidth()
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF2E7D32)
+                containerColor = OasisGreen
             )
         ) {
             if (isProcessing) {
@@ -274,7 +313,7 @@ fun PaymentScreen(
                     modifier = Modifier.size(24.dp)
                 )
             } else {
-                Text("Pay E$totalPrice", fontWeight = FontWeight.Bold)
+                Text("Pay E$totalPrice", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             }
         }
 
@@ -284,7 +323,7 @@ fun PaymentScreen(
             onClick = { navController.popBackStack() },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Cancel Payment")
+            Text("Cancel Payment", color = OasisGreenDark)
         }
     }
 }
@@ -295,85 +334,102 @@ fun JobDetailsScreen(
     finalTransactionId: String,
     finalJobId: String
 ) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(OasisGreen)
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFFE8F5E9)
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                ),
+                elevation = CardDefaults.cardElevation(8.dp)
             ) {
-                Text("✅", style = MaterialTheme.typography.displayLarge)
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Job Activated Successfully!",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color(0xFF2E7D32),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Your job is now visible to providers",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Official IDs
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier.padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Transaction ID:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            Text(finalTransactionId.take(10) + "...", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Job ID:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                            Text(finalJobId.take(10) + "...", style = MaterialTheme.typography.bodySmall)
+                    Text("✅", style = MaterialTheme.typography.displayLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Job Activated Successfully!",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = OasisGreenDark,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Your job is now visible to providers",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.Gray,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = OasisGreenLight
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Transaction ID:", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                                Text(finalTransactionId.take(10) + "...", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Job ID:", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                                Text(finalJobId.take(10) + "...", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-        Button(
-            onClick = {
-                // Navigate back to main entry
-                navController.popBackStack("main_entry", inclusive = false)
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF2E7D32)
-            ),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Finish")
-        }
+            Button(
+                onClick = {
+                    navController.popBackStack("main_entry", inclusive = false)
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = OasisGold,
+                    contentColor = OasisGreenDark
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text("Finish", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        TextButton(
-            onClick = { navController.navigate("client/create_job") },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Create Another Job")
+            OutlinedButton(
+                onClick = { navController.navigate("client/create_job") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color.White
+                ),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(Color.White)
+                )
+            ) {
+                Text("Create Another Job", fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

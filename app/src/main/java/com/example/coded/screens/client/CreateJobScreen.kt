@@ -5,8 +5,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -18,22 +20,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.coded.data.*
 import com.example.coded.ui.maps.GoogleMapAreaCalculator
 import com.example.coded.ui.maps.GoogleMapLocationPicker
+import com.example.coded.ui.theme.*
 import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
 import java.util.*
+import com.example.coded.ui.theme.OasisGreen
+import com.example.coded.ui.theme.OasisGreenDark
+import com.example.coded.ui.theme.OasisGreenLight
+import com.example.coded.ui.theme.OasisGold
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateJobScreen(
-    navController: NavController
-) {
+fun CreateJobScreen(navController: NavController) {
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val jobRepository = remember { JobRepository(context) }
@@ -140,208 +148,272 @@ fun CreateJobScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Create Service Job", color = Color.White) },
+                title = {
+                    Text(
+                        "Create Service Job",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF2E7D32)
+                    containerColor = OasisGreen
                 )
             )
-        }
+        },
+        containerColor = Color.White
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .background(Color.White)
         ) {
-            // Error message
-            errorMessage?.let { error ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Error message
+                errorMessage?.let { error ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                        border = BorderStroke(1.dp, Color(0xFFEF9A9A)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Warning, "Error", tint = Color(0xFFD32F2F))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(error, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-
-            // Service Type Selection
-            ServiceTypeSection(
-                serviceType = serviceType,
-                onServiceTypeChange = {
-                    serviceType = it
-                    serviceVariant = null // Reset variant
-                },
-                serviceTypes = serviceTypes
-            )
-
-            // Service Variant (for specific services)
-            if (serviceType in listOf("plumbing", "electrical", "dstv_installation", "tree_felling")) {
-                ServiceVariantSection(
-                    serviceType = serviceType,
-                    selectedVariant = serviceVariant,
-                    onVariantChange = { serviceVariant = it }
-                )
-            }
-
-            // Location Picker
-            LocationSection(
-                locationAddress = locationAddress,
-                onPickLocation = { showLocationPicker = true }
-            )
-
-            // Area Calculator (for area-based services)
-            if (serviceType in listOf("grass_cutting", "yard_clearing", "gardening")) {
-                AreaCalculatorSection(
-                    estimatedArea = estimatedArea,
-                    onCalculateArea = { showAreaCalculator = true },
-                    vegetationType = vegetationType,
-                    onVegetationTypeChange = { vegetationType = it },
-                    growthStage = growthStage,
-                    onGrowthStageChange = { growthStage = it },
-                    terrainType = terrainType,
-                    onTerrainTypeChange = { terrainType = it },
-                    needsDisposal = needsDisposal && serviceType == "yard_clearing",
-                    onNeedsDisposalChange = { needsDisposal = it },
-                    showDisposal = serviceType == "yard_clearing"
-                )
-            }
-
-            // Description
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Job Description *") },
-                placeholder = { Text("Describe the work needed in detail...") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 4,
-                maxLines = 8,
-                supportingText = { Text("${description.length}/500 characters") }
-            )
-
-            // Image Upload
-            ImageUploadSection(
-                selectedImages = selectedImages,
-                onAddImages = { imagePickerLauncher.launch("image/*") },
-                onRemoveImage = { uri ->
-                    selectedImages = selectedImages.filter { it != uri }
-                }
-            )
-
-            // Urgency & Date
-            UrgencySection(
-                isUrgent = isUrgent,
-                onUrgentChange = { isUrgent = it },
-                preferredDate = preferredDate,
-                onPickDate = { showDatePicker = true }
-            )
-
-            // Mobile Money Details
-            MobileMoneySection(
-                provider = mobileMoneyProvider,
-                onProviderChange = { mobileMoneyProvider = it },
-                number = mobileMoneyNumber,
-                onNumberChange = { mobileMoneyNumber = it }
-            )
-
-            // Price Breakdown
-            priceBreakdown?.let { breakdown ->
-                PriceBreakdownCard(breakdown = breakdown)
-            }
-
-            // Create Job Button
-            Button(
-                onClick = {
-                    // Validate
-                    when {
-                        serviceType.isEmpty() -> errorMessage = "Please select a service type"
-                        description.isEmpty() -> errorMessage = "Please enter a description"
-                        locationAddress == null -> errorMessage = "Please select a location"
-                        serviceType in listOf("grass_cutting", "yard_clearing", "gardening") && estimatedArea == null ->
-                            errorMessage = "Please calculate the area"
-                        priceBreakdown == null -> errorMessage = "Price calculation error"
-                        mobileMoneyNumber.length < 8 -> errorMessage = "Please enter a valid mobile number"
-                        else -> {
-                            errorMessage = null
-                            isCreatingJob = true
-
-                            scope.launch {
-                                try {
-                                    // Create job in Firebase
-                                    val result = jobRepository.createJob(
-                                        serviceType = serviceType,
-                                        description = description,
-                                        locationAddress = locationAddress!!,
-                                        locationLat = locationLat,
-                                        locationLng = locationLng,
-                                        estimatedArea = estimatedArea,
-                                        vegetationType = if (serviceType in listOf("grass_cutting", "yard_clearing", "gardening")) vegetationType else null,
-                                        growthStage = if (serviceType in listOf("grass_cutting", "yard_clearing", "gardening")) growthStage else null,
-                                        terrainType = if (serviceType in listOf("grass_cutting", "yard_clearing", "gardening")) terrainType else null,
-                                        serviceVariant = serviceVariant,
-                                        priceBreakdown = priceBreakdown!!,
-                                        imageUris = selectedImages,
-                                        mobileMoneyProvider = mobileMoneyProvider,
-                                        mobileMoneyNumber = mobileMoneyNumber,
-                                        needsDisposal = needsDisposal,
-                                        isUrgent = isUrgent,
-                                        preferredDate = preferredDate?.let
-                                        { Timestamp(it) }
-                                    )
-
-                                    if (result.isSuccess) {
-                                        val jobId = result.getOrNull()!!
-                                        // Navigate to payment confirmation
-                                        navController.navigate("payment_confirmation/$jobId/${priceBreakdown!!.totalAmount}")
-                                    } else {
-                                        errorMessage = "Failed to create job: ${result.exceptionOrNull()?.message}"
-                                    }
-                                } catch (e: Exception) {
-                                    errorMessage = "Error: ${e.message}"
-                                } finally {
-                                    isCreatingJob = false
-                                }
-                            }
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Warning, "Error", tint = Color(0xFFD32F2F))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                error,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFD32F2F)
+                            )
                         }
                     }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = !isCreatingJob && priceBreakdown != null,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF2E7D32)
+                }
+
+                // Service Type Selection
+                ServiceTypeSection(
+                    serviceType = serviceType,
+                    onServiceTypeChange = {
+                        serviceType = it
+                        serviceVariant = null // Reset variant
+                    },
+                    serviceTypes = serviceTypes
                 )
-            ) {
-                if (isCreatingJob) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        modifier = Modifier.size(24.dp)
+
+                // Service Variant (for specific services)
+                if (serviceType in listOf("plumbing", "electrical", "dstv_installation", "tree_felling")) {
+                    ServiceVariantSection(
+                        serviceType = serviceType,
+                        selectedVariant = serviceVariant,
+                        onVariantChange = { serviceVariant = it }
                     )
-                } else {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.ArrowForward, "Continue")
+                }
+
+                // Location Picker
+                LocationSection(
+                    locationAddress = locationAddress,
+                    onPickLocation = { showLocationPicker = true }
+                )
+
+                // Area Calculator (for area-based services)
+                if (serviceType in listOf("grass_cutting", "yard_clearing", "gardening")) {
+                    AreaCalculatorSection(
+                        estimatedArea = estimatedArea,
+                        onCalculateArea = { showAreaCalculator = true },
+                        vegetationType = vegetationType,
+                        onVegetationTypeChange = { vegetationType = it },
+                        growthStage = growthStage,
+                        onGrowthStageChange = { growthStage = it },
+                        terrainType = terrainType,
+                        onTerrainTypeChange = { terrainType = it },
+                        needsDisposal = needsDisposal && serviceType == "yard_clearing",
+                        onNeedsDisposalChange = { needsDisposal = it },
+                        showDisposal = serviceType == "yard_clearing"
+                    )
+                }
+
+                // Description
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                    elevation = CardDefaults.cardElevation(1.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "Continue to Payment ${priceBreakdown?.formattedTotal ?: ""}",
-                            fontWeight = FontWeight.Bold
+                            "Job Description *",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = OasisGreen
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = description,
+                            onValueChange = {
+                                if (it.length <= 500) description = it
+                            },
+                            placeholder = { Text("Describe the work needed in detail...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 4,
+                            maxLines = 8,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = OasisMint,
+                                focusedLabelColor = OasisGreen,
+                                unfocusedBorderColor = Color(0xFFE0E0E0)
+                            ),
+                            shape = MaterialTheme.shapes.medium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "${description.length}/500 characters",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OasisGray,
+                            modifier = Modifier.align(Alignment.End)
                         )
                     }
                 }
+
+                // Image Upload
+                ImageUploadSection(
+                    selectedImages = selectedImages,
+                    onAddImages = { imagePickerLauncher.launch("image/*") },
+                    onRemoveImage = { uri ->
+                        selectedImages = selectedImages.filter { it != uri }
+                    }
+                )
+
+                // Urgency & Date
+                UrgencySection(
+                    isUrgent = isUrgent,
+                    onUrgentChange = { isUrgent = it },
+                    preferredDate = preferredDate,
+                    onPickDate = { showDatePicker = true }
+                )
+
+                // Mobile Money Details
+                MobileMoneySection(
+                    provider = mobileMoneyProvider,
+                    onProviderChange = { mobileMoneyProvider = it },
+                    number = mobileMoneyNumber,
+                    onNumberChange = { mobileMoneyNumber = it }
+                )
+
+                // Price Breakdown
+                priceBreakdown?.let { breakdown ->
+                    PriceBreakdownCard(breakdown = breakdown)
+                }
+
+                // Create Job Button
+                Button(
+                    onClick = {
+                        // Validate
+                        when {
+                            serviceType.isEmpty() -> errorMessage = "Please select a service type"
+                            description.isEmpty() -> errorMessage = "Please enter a description"
+                            locationAddress == null -> errorMessage = "Please select a location"
+                            serviceType in listOf("grass_cutting", "yard_clearing", "gardening") && estimatedArea == null ->
+                                errorMessage = "Please calculate the area"
+                            priceBreakdown == null -> errorMessage = "Price calculation error"
+                            mobileMoneyNumber.length < 8 -> errorMessage = "Please enter a valid mobile number"
+                            else -> {
+                                errorMessage = null
+                                isCreatingJob = true
+
+                                scope.launch {
+                                    try {
+                                        // Create job in Firebase
+                                        val result = jobRepository.createJob(
+                                            serviceType = serviceType,
+                                            description = description,
+                                            locationAddress = locationAddress!!,
+                                            locationLat = locationLat,
+                                            locationLng = locationLng,
+                                            estimatedArea = estimatedArea,
+                                            vegetationType = if (serviceType in listOf("grass_cutting", "yard_clearing", "gardening")) vegetationType else null,
+                                            growthStage = if (serviceType in listOf("grass_cutting", "yard_clearing", "gardening")) growthStage else null,
+                                            terrainType = if (serviceType in listOf("grass_cutting", "yard_clearing", "gardening")) terrainType else null,
+                                            serviceVariant = serviceVariant,
+                                            priceBreakdown = priceBreakdown!!,
+                                            imageUris = selectedImages,
+                                            mobileMoneyProvider = mobileMoneyProvider,
+                                            mobileMoneyNumber = mobileMoneyNumber,
+                                            needsDisposal = needsDisposal,
+                                            isUrgent = isUrgent,
+                                            preferredDate = preferredDate?.let
+                                            { Timestamp(it) }
+                                        )
+
+                                        if (result.isSuccess) {
+                                            val jobId = result.getOrNull()!!
+                                            // Navigate to payment confirmation
+                                            navController.navigate("payment_confirmation/$jobId/${priceBreakdown!!.totalAmount}")
+                                        } else {
+                                            errorMessage = "Failed to create job: ${result.exceptionOrNull()?.message}"
+                                        }
+                                    } catch (e: Exception) {
+                                        errorMessage = "Error: ${e.message}"
+                                    } finally {
+                                        isCreatingJob = false
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    enabled = !isCreatingJob && priceBreakdown != null,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OasisGreen,
+                        disabledContainerColor = OasisGray.copy(alpha = 0.5f)
+                    ),
+                    shape = MaterialTheme.shapes.medium,
+                    elevation = ButtonDefaults.buttonElevation(
+                        defaultElevation = 4.dp,
+                        pressedElevation = 2.dp
+                    )
+                ) {
+                    if (isCreatingJob) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.ArrowForward, "Continue", tint = Color.White)
+                            Text(
+                                "Continue to Payment ${priceBreakdown?.formattedTotal ?: ""}",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "By creating this job, you agree to our Terms of Service",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OasisGray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -381,28 +453,51 @@ private fun ServiceTypeSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 "Service Type *",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF2E7D32)
+                color = OasisGreen
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                serviceTypes.forEach { (id, label) ->
-                    FilterChip(
-                        selected = serviceType == id,
-                        onClick = { onServiceTypeChange(id) },
-                        label = { Text(label) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFF2E7D32),
-                            selectedLabelColor = Color.White
-                        ),
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                serviceTypes.chunked(3).forEach { rowItems ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
-                    )
+                    ) {
+                        rowItems.forEach { (id, label) ->
+                            FilterChip(
+                                selected = serviceType == id,
+                                onClick = { onServiceTypeChange(id) },
+                                label = {
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = OasisGreen,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = Color(0xFFF5F5F5)
+                                ),
+
+                                modifier = Modifier.weight(1f),
+                                enabled = true
+                            )
+                        }
+                        // Add empty weight to fill the row if needed
+                        repeat(3 - rowItems.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
@@ -449,13 +544,15 @@ private fun ServiceVariantSection(
     if (variants.isNotEmpty()) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F9F9)),
+            border = BorderStroke(1.dp, OasisMint.copy(alpha = 0.2f))
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     "Select Variant *",
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = OasisDark
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -463,12 +560,19 @@ private fun ServiceVariantSection(
                         FilterChip(
                             selected = selectedVariant == id,
                             onClick = { onVariantChange(id) },
-                            label = { Text(label, style = MaterialTheme.typography.bodySmall) },
+                            label = {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Color(0xFF2E7D32),
-                                selectedLabelColor = Color.White
+                                selectedContainerColor = OasisGreen,
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White
                             ),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = true
                         )
                     }
                 }
@@ -485,35 +589,65 @@ private fun LocationSection(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "Job Location *",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF2E7D32)
-            )
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    "Job Location *",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = OasisGreen
+                )
+                Icon(
+                    Icons.Default.LocationOn,
+                    "Location",
+                    tint = OasisMint
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(
                 onClick = onPickLocation,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White,
+                    contentColor = OasisGreen
+                ),
+                border = BorderStroke(1.dp, OasisMint)
             ) {
-                Icon(Icons.Default.LocationOn, "Location")
+                Icon(Icons.Default.LocationOn, "Map")
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(locationAddress ?: "📍 Pick Location on Map")
+                Text(locationAddress ?: "Pick Location on Map")
             }
             if (locationAddress != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                    colors = CardDefaults.cardColors(containerColor = OasisGreen.copy(alpha = 0.1f)),
+                    border = BorderStroke(1.dp, OasisMint.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        locationAddress,
+                    Row(
                         modifier = Modifier.padding(12.dp),
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            "Selected",
+                            tint = OasisGreen,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            locationAddress,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OasisDark
+                        )
+                    }
                 }
             }
         }
@@ -536,36 +670,57 @@ private fun AreaCalculatorSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 "Area & Conditions *",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = OasisGreen
             )
             Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedButton(
                 onClick = onCalculateArea,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White,
+                    contentColor = OasisGreen
+                ),
+                border = BorderStroke(1.dp, OasisMint)
             ) {
-                Text(estimatedArea?.let { "📐 Area: ${it.toInt()} m²" } ?: "📐 Calculate Area")
+                Text(
+                    estimatedArea?.let { "📐 Area: ${it.toInt()} m²" } ?: "📐 Calculate Area on Map",
+                    fontWeight = FontWeight.Medium
+                )
             }
 
             if (estimatedArea != null) {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Vegetation Type
-                Text("Vegetation Type:", style = MaterialTheme.typography.labelSmall)
+                Text("Vegetation Type:", style = MaterialTheme.typography.labelMedium, color = OasisDark)
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("light" to "Light", "medium" to "Medium", "heavy" to "Heavy", "overgrown" to "Overgrown").forEach { (id, label) ->
                         FilterChip(
                             selected = vegetationType == id,
                             onClick = { onVegetationTypeChange(id) },
-                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.weight(1f)
+                            label = {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = OasisGreen,
+                                selectedLabelColor = Color.White,
+                                containerColor = Color(0xFFF5F5F5)
+                            ),
+                            modifier = Modifier.weight(1f),
+                            enabled = true
                         )
                     }
                 }
@@ -573,15 +728,26 @@ private fun AreaCalculatorSection(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Growth Stage
-                Text("Growth Stage:", style = MaterialTheme.typography.labelSmall)
+                Text("Growth Stage:", style = MaterialTheme.typography.labelMedium, color = OasisDark)
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("new" to "New", "medium" to "Medium", "mature" to "Mature").forEach { (id, label) ->
                         FilterChip(
                             selected = growthStage == id,
                             onClick = { onGrowthStageChange(id) },
-                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.weight(1f)
+                            label = {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = OasisGreen,
+                                selectedLabelColor = Color.White,
+                                containerColor = Color(0xFFF5F5F5)
+                            ),
+                            modifier = Modifier.weight(1f),
+                            enabled = true
                         )
                     }
                 }
@@ -589,31 +755,58 @@ private fun AreaCalculatorSection(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Terrain Type
-                Text("Terrain Type:", style = MaterialTheme.typography.labelSmall)
+                Text("Terrain Type:", style = MaterialTheme.typography.labelMedium, color = OasisDark)
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf("flat" to "Flat", "sloped" to "Sloped", "uneven" to "Uneven").forEach { (id, label) ->
                         FilterChip(
                             selected = terrainType == id,
                             onClick = { onTerrainTypeChange(id) },
-                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.weight(1f)
+                            label = {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = OasisGreen,
+                                selectedLabelColor = Color.White,
+                                containerColor = Color(0xFFF5F5F5)
+                            ),
+                            modifier = Modifier.weight(1f),
+                            enabled = true
                         )
                     }
                 }
 
                 if (showDisposal) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = OasisGreen.copy(alpha = 0.05f)),
+                        border = BorderStroke(1.dp, OasisMint.copy(alpha = 0.2f))
                     ) {
-                        Text("Needs Disposal?", style = MaterialTheme.typography.bodySmall)
-                        Switch(
-                            checked = needsDisposal,
-                            onCheckedChange = onNeedsDisposalChange
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Needs Disposal?", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text("Extra cost applies", style = MaterialTheme.typography.bodySmall, color = OasisGray)
+                            }
+                            Switch(
+                                checked = needsDisposal,
+                                onCheckedChange = onNeedsDisposalChange,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = OasisGreen,
+                                    uncheckedThumbColor = Color.White,
+                                    uncheckedTrackColor = OasisGray
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -629,25 +822,34 @@ private fun ImageUploadSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        border = BorderStroke(1.dp, Color.LightGray)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     "Reference Photos (Optional)",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = OasisGreen
                 )
                 Text(
                     "${selectedImages.size}/3",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = OasisGray
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Upload photos to help workers understand the job better",
+                style = MaterialTheme.typography.bodySmall,
+                color = OasisGray
+            )
+            Spacer(modifier = Modifier.height(12.dp))
 
             if (selectedImages.isNotEmpty()) {
                 Row(
@@ -657,38 +859,61 @@ private fun ImageUploadSection(
                     selectedImages.forEach { uri ->
                         Box(
                             modifier = Modifier
-                                .size(80.dp)
+                                .size(100.dp)
                                 .weight(1f)
                         ) {
-                            Image(
-                                painter = rememberAsyncImagePainter(uri),
-                                contentDescription = "Image",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
+                            Card(
+                                shape = MaterialTheme.shapes.medium,
+                                elevation = CardDefaults.cardElevation(2.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(uri),
+                                    contentDescription = "Reference image",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
                             IconButton(
                                 onClick = { onRemoveImage(uri) },
-                                modifier = Modifier.align(Alignment.TopEnd)
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(4.dp, (-4).dp)
                             ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    "Remove",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEF5350)),
+                                    shape = MaterialTheme.shapes.small,
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            "Remove",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             if (selectedImages.size < 3) {
                 OutlinedButton(
                     onClick = onAddImages,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.White,
+                        contentColor = OasisGreen
+                    ),
+                    border = BorderStroke(1.dp, OasisMint)
                 ) {
-                    Text("📷 Add Photos")
+
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add Photos")
                 }
             }
         }
@@ -704,7 +929,8 @@ private fun UrgencySection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, if (isUrgent) OasisMint.copy(alpha = 0.5f) else Color(0xFFE0E0E0))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -713,16 +939,22 @@ private fun UrgencySection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("🚨 Urgent Job?", fontWeight = FontWeight.Bold)
+                    Text("🚨 Urgent Job", fontWeight = FontWeight.Bold, color = OasisDark)
                     Text(
-                        "Add E200 for priority assignment",
+                        "Add E200 for priority assignment & faster response",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
+                        color = OasisGray
                     )
                 }
                 Switch(
                     checked = isUrgent,
-                    onCheckedChange = onUrgentChange
+                    onCheckedChange = onUrgentChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = OasisGreen,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = OasisGray
+                    )
                 )
             }
         }
@@ -738,40 +970,77 @@ private fun MobileMoneySection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 "📱 Mobile Money Details",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = OasisGreen
             )
             Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                "Your payment will be processed via mobile money",
+                style = MaterialTheme.typography.bodySmall,
+                color = OasisGray
+            )
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Provider:", style = MaterialTheme.typography.labelSmall)
+            Text("Provider *", style = MaterialTheme.typography.labelMedium, color = OasisDark)
             Spacer(modifier = Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = provider == "mtn",
                     onClick = { onProviderChange("mtn") },
-                    label = { Text("MTN") }
+                    label = { Text("MTN", fontWeight = FontWeight.Medium) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = OasisGreen,
+                        selectedLabelColor = Color.White,
+                        containerColor = Color(0xFFF5F5F5)
+                    ),
+                    modifier = Modifier.weight(1f),
+                    enabled = true
                 )
                 FilterChip(
                     selected = provider == "eswatini_mobile",
                     onClick = { onProviderChange("eswatini_mobile") },
-                    label = { Text("Eswatini Mobile") }
+                    label = { Text("Eswatini Mobile", fontWeight = FontWeight.Medium) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = OasisGreen,
+                        selectedLabelColor = Color.White,
+                        containerColor = Color(0xFFF5F5F5)
+                    ),
+                    modifier = Modifier.weight(1f),
+                    enabled = true
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = number,
-                onValueChange = onNumberChange,
+                onValueChange = {
+                    if (it.all { char -> char.isDigit() || char.isWhitespace() })
+                        onNumberChange(it)
+                },
                 label = { Text("Mobile Number *") },
                 placeholder = { Text("7612 3456") },
-                leadingIcon = { Icon(Icons.Default.Phone, "Phone") },
-                modifier = Modifier.fillMaxWidth()
+                leadingIcon = { Icon(Icons.Default.Phone, "Phone", tint = OasisMint) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = OasisMint,
+                    focusedLabelColor = OasisGreen,
+                    unfocusedBorderColor = Color(0xFFE0E0E0)
+                ),
+                shape = MaterialTheme.shapes.medium
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "This number will be used for payment confirmation",
+                style = MaterialTheme.typography.bodySmall,
+                color = OasisGray
             )
         }
     }
@@ -782,9 +1051,10 @@ private fun PriceBreakdownCard(breakdown: JobPriceBreakdown) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFE8F5E9)
+            containerColor = OasisGreen.copy(alpha = 0.08f)
         ),
-        elevation = CardDefaults.cardElevation(4.dp)
+        border = BorderStroke(1.dp, OasisMint.copy(alpha = 0.3f)),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -796,43 +1066,55 @@ private fun PriceBreakdownCard(breakdown: JobPriceBreakdown) {
                     "💰 Price Breakdown",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2E7D32)
+                    color = OasisGreen
                 )
                 Text(
                     breakdown.formattedEstimatedTime,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = OasisGray,
+                    fontWeight = FontWeight.Medium
                 )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Divider()
+            Divider(color = OasisMint.copy(alpha = 0.3f))
             Spacer(modifier = Modifier.height(12.dp))
 
             breakdown.getDetailedBreakdown().forEach { (label, amount) ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         label,
                         style = if (label.contains("TOTAL"))
                             MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         else
-                            MaterialTheme.typography.bodySmall,
-                        color = if (label.contains("TOTAL")) Color(0xFF2E7D32) else Color.Black
+                            MaterialTheme.typography.bodyMedium,
+                        color = if (label.contains("TOTAL")) OasisGreen else OasisDark
                     )
                     Text(
                         amount,
                         style = if (label.contains("TOTAL"))
                             MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         else
-                            MaterialTheme.typography.bodySmall,
-                        color = if (label.contains("TOTAL")) Color(0xFF2E7D32) else Color.Black
+                            MaterialTheme.typography.bodyMedium,
+                        color = if (label.contains("TOTAL")) OasisGreen else OasisDark
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Divider(color = OasisMint.copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                "💡 Price includes labor, basic equipment, and local travel",
+                style = MaterialTheme.typography.bodySmall,
+                color = OasisGray
+            )
         }
     }
 }

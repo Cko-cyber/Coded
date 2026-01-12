@@ -21,7 +21,20 @@ android {
 
         // Supabase credentials
         buildConfigField("String", "SUPABASE_URL", "\"https://vxetgoaowehxxifdbdmm.supabase.co\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4ZXRnb2Fvd2VoeHhpZmRiZG1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5MjE4MzYsImV4cCI6MjA3NjQ5NzgzNn0.n7V7iNzNkMjzb2aNq_Z2ANoC7EhmdQcFB4H3tRBnNVM\"")
+        buildConfigField(
+            "String",
+            "SUPABASE_ANON_KEY",
+            "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4ZXRnb2Fvd2VoeHhpZmRiZG1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5MjE4MzYsImV4cCI6MjA3NjQ5NzgzNn0.n7V7iNzNkMjzb2aNq_Z2ANoC7EhmdQcFB4H3tRBnNVM\""
+        )
+    }
+        configurations.all {
+        resolutionStrategy {
+            // Force a specific version of browser library
+            force("androidx.browser:browser:1.7.0")  // Stable version
+
+            // Alternatively, exclude browser library if not used
+            // exclude(group = "androidx.browser", module = "browser")
+        }
     }
 
     buildTypes {
@@ -47,7 +60,8 @@ android {
 }
 
 dependencies {
-
+    implementation("androidx.compose.material:material-icons-extended:1.5.4")
+    implementation("androidx.browser:browser:1.7.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

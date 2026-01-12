@@ -11,30 +11,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.coded.R  // Changed from com.oasis.R to com.example.coded.R
+import com.example.coded.R
 import com.example.coded.data.OasisAuthRepository
+import com.example.coded.ui.theme.*
 import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
-import androidx.compose.ui.text.style.TextAlign
 import com.google.firebase.auth.FirebaseAuth
-import androidx.navigation.NavGraphBuilder
-import androidx.navigation.compose.composable
 
 @Composable
 fun SplashScreen(
     navController: NavController,
     authRepository: OasisAuthRepository
 ) {
+    // Animation for logo entrance
     val logoScale by animateFloatAsState(
         targetValue = 1f,
         animationSpec = spring(
@@ -43,35 +43,53 @@ fun SplashScreen(
         ),
         label = "logo_scale"
     )
+
     val logoAlpha by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = tween(800),
+        animationSpec = tween(1200),
         label = "logo_alpha"
     )
 
-    LaunchedEffect(Unit) {
-        delay(2000) // Reduced from 3000 to 2000 for faster experience
+    // Floating animation (matching website's float animation)
+    val infiniteTransition = rememberInfiniteTransition(label = "float")
+    val floatOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "float_offset"
+    )
 
-        // Check authentication state directly from Firebase Auth
+    LaunchedEffect(Unit) {
+        delay(2500)
+
         val currentUser = FirebaseAuth.getInstance().currentUser
 
         if (currentUser != null) {
-            // User is logged in - navigate to main_entry
             navController.navigate("main_entry") {
                 popUpTo("splash") { inclusive = true }
             }
         } else {
-            // Not logged in, go to main entry
             navController.navigate("login") {
                 popUpTo("splash") { inclusive = true }
             }
         }
     }
 
+    // Gradient background matching website theme (OasisGreen to OasisDark)
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF4CAF50))
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        OasisGreen,      // #1F4F46
+                        OasisDark        // #0F2E2B
+                    )
+                )
+            )
             .semantics { contentDescription = "Oasis splash screen" },
         contentAlignment = Alignment.Center
     ) {
@@ -82,8 +100,9 @@ fun SplashScreen(
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(100.dp))
 
+            // Main Content - Icon Only Logo
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -92,62 +111,56 @@ fun SplashScreen(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.offset(y = floatOffset.dp)
                 ) {
-                    // Logo with animation
+                    // ICON-ONLY LOGO
                     Image(
-                        painter = painterResource(id = R.drawable.oasis_logo),
-                        contentDescription = "Oasis Logo",
+                        painter = painterResource(id = R.drawable.oasis_logo_icon),
+                        contentDescription = "Oasis Icon",
                         modifier = Modifier
-                            .fillMaxWidth(0.7f)
-                            .aspectRatio(1f)
+                            .size(160.dp)
                             .scale(logoScale)
                             .alpha(logoAlpha),
                         contentScale = ContentScale.Fit
                     )
 
-                    // App name with fade-in
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Tagline fade-in
                     AnimatedVisibility(
-                        visible = logoAlpha > 0.5f,
-                        enter = fadeIn(animationSpec = tween(500))
+                        visible = logoAlpha > 0.6f,
+                        enter = fadeIn(animationSpec = tween(1000))
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Oasis",
-                                style = MaterialTheme.typography.displayLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 48.sp
-                            )
-                            Text(
-                                text = "On-demand Services",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color.White.copy(alpha = 0.8f)
-                            )
-                        }
+                        Text(
+                            text = "On-demand Services",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = OasisMint,
+                            fontWeight = FontWeight.Normal,
+                            letterSpacing = 1.2.sp
+                        )
                     }
                 }
             }
 
-            // Loading indicator and tagline
+            // Footer Section
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .padding(bottom = 48.dp)
+                modifier = Modifier.padding(bottom = 48.dp)
             ) {
-                // Loading dots animation
+                // Loading dots
                 LoadingDots()
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // Trust indicators
                 Text(
-                    text = "Connecting you with trusted service providers",
+                    text = "Trusted • Reliable • Professional",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center
+                    color = OasisGray.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    letterSpacing = 1.sp
                 )
             }
         }
@@ -156,7 +169,7 @@ fun SplashScreen(
 
 @Composable
 fun LoadingDots() {
-    val infiniteTransition = rememberInfiniteTransition()
+    val infiniteTransition = rememberInfiniteTransition(label = "loading_dots")
 
     val dot1Alpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -207,30 +220,33 @@ fun LoadingDots() {
     )
 
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(10.dp)
+                .alpha(dot1Alpha)
                 .background(
-                    color = Color.White.copy(alpha = dot1Alpha),
+                    color = OasisMint,
                     shape = androidx.compose.foundation.shape.CircleShape
                 )
         )
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(10.dp)
+                .alpha(dot2Alpha)
                 .background(
-                    color = Color.White.copy(alpha = dot2Alpha),
+                    color = OasisMint,
                     shape = androidx.compose.foundation.shape.CircleShape
                 )
         )
         Box(
             modifier = Modifier
-                .size(8.dp)
+                .size(10.dp)
+                .alpha(dot3Alpha)
                 .background(
-                    color = Color.White.copy(alpha = dot3Alpha),
+                    color = OasisMint,
                     shape = androidx.compose.foundation.shape.CircleShape
                 )
         )

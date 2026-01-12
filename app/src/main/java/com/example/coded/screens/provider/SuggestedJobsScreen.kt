@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coded.data.Job
 import com.example.coded.data.JobRepository
+import com.example.coded.ui.theme.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -50,14 +51,20 @@ fun SuggestedJobsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Available Jobs") },
+                title = {
+                    Text(
+                        "Available Jobs",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF2E7D32)
+                    containerColor = OasisGreen
                 ),
                 actions = {
                     IconButton(onClick = {
@@ -84,13 +91,13 @@ fun SuggestedJobsScreen(
                             isLoading = false
                         }
                     }) {
-                        Icon(Icons.Filled.Refresh, "Refresh")
+                        Icon(Icons.Default.Refresh, "Refresh", tint = Color.White)
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = {
                     scope.launch {
                         isLoading = true
@@ -106,21 +113,26 @@ fun SuggestedJobsScreen(
                         isLoading = false
                     }
                 },
-                containerColor = Color(0xFF2E7D32)
+                containerColor = OasisGreen,
+                modifier = Modifier.padding(bottom = 16.dp)
             ) {
-                Icon(Icons.Filled.Add, "Add Test Jobs")
+                Icon(Icons.Default.Add, "Add Test Jobs")
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add Test Jobs")
             }
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.White)
                 .padding(paddingValues)
         ) {
             // Error message
             errorMessage?.let { error ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                    border = CardDefaults.cardBorder(1.dp, Color(0xFFEF9A9A)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -129,9 +141,13 @@ fun SuggestedJobsScreen(
                         modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Filled.Warning, "Error", tint = Color(0xFFD32F2F))
+                        Icon(Icons.Default.Warning, "Error", tint = Color(0xFFD32F2F))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(error, style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFD32F2F)
+                        )
                     }
                 }
             }
@@ -142,56 +158,102 @@ fun SuggestedJobsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFE8F5E9)
-                )
+                    containerColor = OasisGreen.copy(alpha = 0.08f)
+                ),
+                border = CardDefaults.cardBorder(1.dp, OasisMint.copy(alpha = 0.3f))
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            availableJobs.size.toString(),
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
-                        )
-                        Text("Jobs Available", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "E${availableJobs.sumOf { it.totalAmount }.toInt()}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
-                        )
-                        Text("Total Value", style = MaterialTheme.typography.bodySmall)
-                    }
+                    StatItem(
+                        value = availableJobs.size.toString(),
+                        label = "Jobs Available",
+                        icon = Icons.Default.Work
+                    )
+                    VerticalDivider(
+                        modifier = Modifier.height(40.dp),
+                        color = OasisMint.copy(alpha = 0.3f)
+                    )
+                    StatItem(
+                        value = "E${availableJobs.sumOf { it.totalAmount }.toInt()}",
+                        label = "Total Value",
+                        icon = Icons.Default.AttachMoney
+                    )
+                    VerticalDivider(
+                        modifier = Modifier.height(40.dp),
+                        color = OasisMint.copy(alpha = 0.3f)
+                    )
+                    StatItem(
+                        value = availableJobs.count { it.isUrgent }.toString(),
+                        label = "Urgent",
+                        icon = Icons.Default.Warning,
+                        iconColor = Color(0xFFFF9800)
+                    )
                 }
             }
 
             // Filter chips
-            Row(
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = CardDefaults.cardBorder(1.dp, OasisMint.copy(alpha = 0.3f))
             ) {
-                FilterChip(
-                    selected = selectedFilter == "ALL",
-                    onClick = { selectedFilter = "ALL" },
-                    label = { Text("All") }
-                )
-                FilterChip(
-                    selected = selectedFilter == "NEARBY",
-                    onClick = { selectedFilter = "NEARBY" },
-                    label = { Text("Nearby") }
-                )
-                FilterChip(
-                    selected = selectedFilter == "HIGH_PAY",
-                    onClick = { selectedFilter = "HIGH_PAY" },
-                    label = { Text("High Pay") }
-                )
+                Column(
+                    modifier = Modifier.padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        "Filter Jobs",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = OasisDark
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedFilter == "ALL",
+                            onClick = { selectedFilter = "ALL" },
+                            label = { Text("All") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = OasisGreen,
+                                selectedLabelColor = Color.White,
+                                containerColor = OasisGray
+                            ),
+                            modifier = Modifier.weight(1f),
+                            enabled = true
+                        )
+                        FilterChip(
+                            selected = selectedFilter == "NEARBY",
+                            onClick = { selectedFilter = "NEARBY" },
+                            label = { Text("Nearby") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = OasisGreen,
+                                selectedLabelColor = Color.White,
+                                containerColor = OasisGray
+                            ),
+                            modifier = Modifier.weight(1f),
+                            enabled = true
+                        )
+                        FilterChip(
+                            selected = selectedFilter == "HIGH_PAY",
+                            onClick = { selectedFilter = "HIGH_PAY" },
+                            label = { Text("High Pay") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = OasisGreen,
+                                selectedLabelColor = Color.White,
+                                containerColor = OasisGray
+                            ),
+                            modifier = Modifier.weight(1f),
+                            enabled = true
+                        )
+                    }
+                }
             }
 
             if (isLoading) {
@@ -199,28 +261,44 @@ fun SuggestedJobsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = Color(0xFF2E7D32))
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(color = OasisGreen)
+                        Text(
+                            "Loading available jobs...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OasisGray
+                        )
+                    }
                 }
             } else if (availableJobs.isEmpty()) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(16.dp),
+                        .padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-
+                    Icon(
+                        Icons.Default.WorkOutline,
+                        contentDescription = "No jobs",
+                        tint = OasisGray,
+                        modifier = Modifier.size(80.dp)
+                    )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "No jobs available yet",
                         style = MaterialTheme.typography.titleMedium,
-                        color = Color.Gray
+                        fontWeight = FontWeight.SemiBold,
+                        color = OasisDark
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Click the + button to create test jobs",
+                        "Click the button below to create test jobs and explore the platform",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray,
+                        color = OasisGray,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(24.dp))
@@ -239,20 +317,34 @@ fun SuggestedJobsScreen(
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF2E7D32)
-                        )
+                            containerColor = OasisGreen
+                        ),
+                        shape = MaterialTheme.shapes.medium
                     ) {
-                        Text("Generate Test Jobs")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Add, "Generate")
+                            Text("Generate Test Jobs")
+                        }
                     }
                 }
             } else {
+                // Apply filters
+                val filteredJobs = when (selectedFilter) {
+                    "NEARBY" -> availableJobs.sortedBy { it.distanceFromProvider ?: 0.0 }
+                    "HIGH_PAY" -> availableJobs.sortedByDescending { it.totalAmount }
+                    else -> availableJobs
+                }
+
                 // Job list
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(16.dp)
                 ) {
-                    items(availableJobs) { job ->
+                    items(filteredJobs) { job ->
                         JobCard(
                             job = job,
                             onViewDetails = {
@@ -268,6 +360,42 @@ fun SuggestedJobsScreen(
 }
 
 @Composable
+fun StatItem(
+    value: String,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color = OasisGreen
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = iconColor,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = OasisDark
+            )
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = OasisGray
+        )
+    }
+}
+
+@Composable
 fun JobCard(
     job: Job,
     onViewDetails: () -> Unit
@@ -277,7 +405,9 @@ fun JobCard(
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         ),
-        elevation = CardDefaults.cardElevation(4.dp),
+        elevation = CardDefaults.cardElevation(2.dp),
+        border = CardDefaults.cardBorder(1.dp, OasisMint.copy(alpha = 0.2f)),
+        shape = MaterialTheme.shapes.medium,
         onClick = onViewDetails
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -290,8 +420,11 @@ fun JobCard(
                     text = job.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2E7D32)
+                    color = OasisGreen,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
                 )
+
                 Badge(
                     containerColor = when (job.serviceType) {
                         "grass_cutting" -> Color(0xFF4CAF50)
@@ -301,13 +434,14 @@ fun JobCard(
                         "cleaning" -> Color(0xFF2196F3)
                         "plumbing" -> Color(0xFFFF9800)
                         "electrical" -> Color(0xFF9C27B0)
-                        else -> Color(0xFF2E7D32)
+                        else -> OasisGreen
                     },
                     contentColor = Color.White
                 ) {
                     Text(
                         text = job.serviceType.replace("_", " ").uppercase(),
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -317,44 +451,51 @@ fun JobCard(
             Text(
                 text = job.description.take(80) + if (job.description.length > 80) "..." else "",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
+                color = OasisDark,
+                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.2
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Location and Client row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Filled.LocationOn,
+                    Icons.Default.LocationOn,
                     "Location",
-                    tint = Color.Gray,
+                    tint = OasisGray,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = job.town ?: job.region ?: "Unknown",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = OasisDark
                 )
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.weight(1f))
                 Icon(
-                    Icons.Filled.Person,
+                    Icons.Default.Person,
                     "Client",
-                    tint = Color.Gray,
+                    tint = OasisGray,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = job.clientName,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = OasisDark
                 )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            Divider(color = OasisGray.copy(alpha = 0.3f))
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Payment and Time row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -364,40 +505,42 @@ fun JobCard(
                     Text(
                         text = "Payment",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
+                        color = OasisGray
                     )
                     Text(
                         text = "E${String.format("%.2f", job.totalAmount)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2E7D32)
+                        color = OasisGreen
                     )
                 }
 
                 Text(
                     text = formatTimeAgo(job.createdAt),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = OasisGray,
+                    fontWeight = FontWeight.Medium
                 )
-
-                Button(
-                    onClick = onViewDetails,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2E7D32)
-                    )
-                ) {
-                    Text("View Details")
-                }
             }
 
             // Additional job info
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Info, "Status", modifier = Modifier.size(14.dp))
+                    Icon(
+                        Icons.Default.Info,
+                        "Status",
+                        tint = when (job.status) {
+                            "assigned" -> Color(0xFF2196F3)
+                            "completed" -> Color(0xFF4CAF50)
+                            "cancelled" -> Color(0xFFF44336)
+                            else -> Color(0xFFFF9800)
+                        },
+                        modifier = Modifier.size(14.dp)
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = job.status.replace("_", " ").uppercase(),
@@ -407,19 +550,24 @@ fun JobCard(
                             "completed" -> Color(0xFF4CAF50)
                             "cancelled" -> Color(0xFFF44336)
                             else -> Color(0xFFFF9800)
-                        }
+                        },
+                        fontWeight = FontWeight.Medium
                     )
                 }
 
                 if (job.isUrgent) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Warning, "Urgent",
-                            tint = Color.Red, modifier = Modifier.size(14.dp))
+                        Icon(
+                            Icons.Default.Warning,
+                            "Urgent",
+                            tint = Color(0xFFD32F2F),
+                            modifier = Modifier.size(14.dp)
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "URGENT",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.Red,
+                            color = Color(0xFFD32F2F),
                             fontWeight = FontWeight.Bold
                         )
                     }

@@ -25,4 +25,5 @@
     <color name="background_light">#FFF5F5F5</color>
     <color name="background_card">#FFFFFFFF</color>
     <color name="background_dark">#FF212121</color>
+    <color name="borderColor">#FFE0E0E0</color>
 </resources>
