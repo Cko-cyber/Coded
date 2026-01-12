@@ -7,11 +7,11 @@ import android.os.Build
 import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
+import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.gotrue.Auth
 import io.github.jan.supabase.postgrest.Postgrest
-import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.storage.Storage
 
 class CodedApplication : Application() {
 
@@ -20,7 +20,7 @@ class CodedApplication : Application() {
         const val NOTIFICATION_CHANNEL_ID = "oasis_notifications"
 
         // Supabase client - accessible throughout the app
-        lateinit var supabase: io.github.jan.supabase.SupabaseClient
+        lateinit var supabase: SupabaseClient
             private set
     }
 
@@ -58,7 +58,8 @@ class CodedApplication : Application() {
                 supabaseUrl = BuildConfig.SUPABASE_URL,
                 supabaseKey = BuildConfig.SUPABASE_ANON_KEY
             ) {
-                install(Auth)
+                // Import the Auth module (formerly GoTrue)
+                install(io.github.jan.supabase.auth.Auth)
                 install(Postgrest)
                 install(Storage)
                 install(Realtime)
@@ -69,11 +70,11 @@ class CodedApplication : Application() {
         }
     }
 
+
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = getSystemService(NotificationManager::class.java)
 
-            // Main notifications channel
             val mainChannel = NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
                 "Oasis Notifications",
@@ -84,7 +85,6 @@ class CodedApplication : Application() {
                 enableLights(true)
             }
 
-            // Job updates channel
             val jobChannel = NotificationChannel(
                 "job_updates",
                 "Job Updates",
@@ -93,7 +93,6 @@ class CodedApplication : Application() {
                 description = "Updates about your service jobs"
             }
 
-            // Messages channel
             val messageChannel = NotificationChannel(
                 "messages",
                 "Messages",
@@ -102,7 +101,6 @@ class CodedApplication : Application() {
                 description = "New messages from clients or providers"
             }
 
-            // Payment channel
             val paymentChannel = NotificationChannel(
                 "payments",
                 "Payments",
@@ -114,7 +112,6 @@ class CodedApplication : Application() {
             notificationManager.createNotificationChannels(
                 listOf(mainChannel, jobChannel, messageChannel, paymentChannel)
             )
-
             Log.d(TAG, "✅ Notification channels created")
         }
     }
@@ -122,12 +119,8 @@ class CodedApplication : Application() {
     private fun subscribeFCMTopics() {
         try {
             FirebaseMessaging.getInstance().subscribeToTopic("all_users")
-                .addOnSuccessListener {
-                    Log.d(TAG, "✅ Subscribed to all_users topic")
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "❌ Failed to subscribe to all_users topic", e)
-                }
+                .addOnSuccessListener { Log.d(TAG, "✅ Subscribed to all_users topic") }
+                .addOnFailureListener { e -> Log.e(TAG, "❌ Failed to subscribe to all_users topic", e) }
         } catch (e: Exception) {
             Log.e(TAG, "❌ FCM topic subscription failed", e)
         }

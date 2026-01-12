@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coded.R
+import androidx.compose.foundation.BorderStroke
 import com.example.coded.data.OasisAuthRepository
 import com.example.coded.ui.theme.OasisGreen
 import com.example.coded.ui.theme.OasisMint
@@ -330,7 +331,7 @@ private fun QuickActionsSection(
                 colors = CardDefaults.cardColors(
                     containerColor = Color.White
                 ),
-                border = CardDefaults.cardColors(containerColor = Color.White).containerColor,
+                border = BorderStroke(1.dp, OasisGreen),
                 onClick = { navController.navigate("profile") }
             ) {
                 Row(
@@ -358,7 +359,7 @@ private fun QuickActionsSection(
                 colors = CardDefaults.cardColors(
                     containerColor = Color.White
                 ),
-                border = CardDefaults.cardColors(containerColor = Color.White).containerColor,
+                border = BorderStroke(1.dp, OasisGreen),
                 onClick = { navController.navigate("settings") }
             ) {
                 Row(
