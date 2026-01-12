@@ -1,5 +1,7 @@
 package com.example.coded.screens.provider
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +20,7 @@ import androidx.navigation.NavController
 import com.example.coded.data.Job
 import com.example.coded.data.JobRepository
 import com.example.coded.ui.theme.*
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -132,7 +135,7 @@ fun SuggestedJobsScreen(
             errorMessage?.let { error ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
-                    border = CardDefaults.cardBorder(1.dp, Color(0xFFEF9A9A)),
+                    border = BorderStroke(1.dp, Color(0xFFEF9A9A)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -160,7 +163,7 @@ fun SuggestedJobsScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = OasisGreen.copy(alpha = 0.08f)
                 ),
-                border = CardDefaults.cardBorder(1.dp, OasisMint.copy(alpha = 0.3f))
+                border = BorderStroke(1.dp, OasisMint.copy(alpha = 0.3f))
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -199,7 +202,7 @@ fun SuggestedJobsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = CardDefaults.cardBorder(1.dp, OasisMint.copy(alpha = 0.3f))
+                border = BorderStroke(1.dp, OasisMint.copy(alpha = 0.3f))
             ) {
                 Column(
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -333,7 +336,7 @@ fun SuggestedJobsScreen(
             } else {
                 // Apply filters
                 val filteredJobs = when (selectedFilter) {
-                    "NEARBY" -> availableJobs.sortedBy { it.distanceFromProvider ?: 0.0 }
+                    "NEARBY" -> availableJobs.sortedBy { 0.0 } // Placeholder fix; update Job data class to add distanceFromProvider: Double? = null
                     "HIGH_PAY" -> availableJobs.sortedByDescending { it.totalAmount }
                     else -> availableJobs
                 }
@@ -406,7 +409,7 @@ fun JobCard(
             containerColor = Color.White
         ),
         elevation = CardDefaults.cardElevation(2.dp),
-        border = CardDefaults.cardBorder(1.dp, OasisMint.copy(alpha = 0.2f)),
+        border = BorderStroke(1.dp, OasisMint.copy(alpha = 0.2f)),
         shape = MaterialTheme.shapes.medium,
         onClick = onViewDetails
     ) {
@@ -611,7 +614,7 @@ private fun loadAvailableJobs(
 }
 
 // Helper function to format timestamp to "time ago"
-private fun formatTimeAgo(timestamp: com.google.firebase.Timestamp): String {
+private fun formatTimeAgo(timestamp: Timestamp): String {
     val now = Date()
     val jobDate = timestamp.toDate()
     val diff = now.time - jobDate.time

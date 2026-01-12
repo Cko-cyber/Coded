@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
     id("kotlin-kapt")
 }
@@ -50,8 +49,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.14"
+    }
+
     kotlinOptions {
         jvmTarget = "11"
+
     }
     buildFeatures {
         compose = true
@@ -77,21 +82,22 @@ dependencies {
 
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
-    implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-messaging-ktx")
-    implementation("com.google.firebase:firebase-storage-ktx")
+
+    //Kotlinx serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.5.0")
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // Supabase
-    implementation(platform("io.github.jan-tennert.supabase:bom:2.5.2"))
-    implementation("io.github.jan-tennert.supabase:gotrue-kt")
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.2.2"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:storage-kt")
     implementation("io.github.jan-tennert.supabase:realtime-kt")
-    implementation("io.ktor:ktor-client-android:2.3.7")
+    implementation("io.ktor:ktor-client-android:3.0.0")
 
     // Google Maps
     implementation("com.google.maps.android:maps-compose:4.3.0")
@@ -112,8 +118,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Dagger Hilt (for DI)
-    implementation("com.google.dagger:hilt-android:2.48")
-    kapt("com.google.dagger:hilt-compiler:2.48")
+    implementation("com.google.dagger:hilt-android:2.51.1")
+    kapt("com.google.dagger:hilt-compiler:2.51.1")
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
 
     testImplementation(libs.junit)
