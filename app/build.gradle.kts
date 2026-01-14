@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)  // Add this line
     id("com.google.gms.google-services")
     id("kotlin-kapt")
 }
@@ -51,7 +52,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
+        kotlinCompilerExtensionVersion = "1.5.15"
     }
 
     kotlinOptions {
@@ -83,7 +84,8 @@ dependencies {
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.4.0"))
     implementation("com.google.firebase:firebase-messaging-ktx")
-
+    // Add coroutines support for any remaining Firebase calls
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     //Kotlinx serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.5.0")

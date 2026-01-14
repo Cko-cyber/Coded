@@ -1,23 +1,23 @@
 package com.example.coded.utils
 
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
-import java.util.*
+import com.example.coded.CodedApplication
+import io.github.jan.supabase.postgrest.from
+import kotlinx.datetime.Instant
 
 object TestHelper {
-    private val db = FirebaseFirestore.getInstance()
+    private val supabase = CodedApplication.supabase
 
     suspend fun createTestJobsForProviders(count: Int = 5) {
-        val jobsRef = db.collection("jobs")
+        val jobsRef = supabase.from("jobs")
 
         for (i in 1..count) {
             val jobId = "TEST_JOB_${System.currentTimeMillis()}_$i"
 
             val testJob = mapOf(
                 "id" to jobId,
-                "clientId" to "test_client_$i",
-                "clientName" to "Test Client $i",
-                "serviceType" to when (i % 3) {
+                "client_id" to "test_client_$i",
+                "client_name" to "Test Client $i",
+                "service_type" to when (i % 3) {
                     0 -> "grass_cutting"
                     1 -> "cleaning"
                     else -> "plumbing"
@@ -28,9 +28,9 @@ object TestHelper {
                     else -> "Plumbing Repair"
                 }}",
                 "description" to "This is a test job created for provider testing. Area: ${50 + i * 10} sq m",
-                "locationAddress" to "Test Location $i, Mbabane, Eswatini",
-                "totalAmount" to (100 + i * 50).toDouble(),
-                "paymentStatus" to "paid",
+                "location_address" to "Test Location $i, Mbabane, Eswatini",
+                "total_amount" to (100 + i * 50).toDouble(),
+                "payment_status" to "paid",
                 "status" to "pending_assignment",
                 "region" to when (i % 4) {
                     0 -> "Hhohho"
@@ -43,21 +43,35 @@ object TestHelper {
                     1 -> "Manzini"
                     else -> "Matsapha"
                 },
-                "createdAt" to com.google.firebase.Timestamp.now(),
-                "updatedAt" to com.google.firebase.Timestamp.now(),
-                "isTestJob" to true
+                "created_at" to Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString(),
+                "updated_at" to Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString(),
+                "is_test_job" to true
             )
 
-            jobsRef.document(jobId).set(testJob).await()
+            jobsRef.insert(testJob)
         }
     }
 
     suspend fun clearTestJobs() {
-        val jobsRef = db.collection("jobs")
-        val query = jobsRef.whereEqualTo("isTestJob", true).get().await()
+        // Note: Supabase delete requires filtering
+        // This would be better done via a Postgres function or manual deletion
+        val jobsRef = supabase.from("jobs")
 
-        for (doc in query.documents) {
-            jobsRef.document(doc.id).delete().await()
+        val testJobs = jobsRef.select() {
+            filter {
+                eq("is_test_job", true)
+            }
+        }.decodeList<Map<String, Any>>()
+
+        testJobs.forEach { job ->
+            val id = job["id"] as? String
+            if (id != null) {
+                jobsRef.delete {
+                    filter {
+                        eq("id", id)
+                    }
+                }
+            }
         }
     }
 }

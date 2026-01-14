@@ -60,11 +60,10 @@ class SupabaseStorageHelper(private val context: Context) {
                     } ?: throw Exception("Failed to read image file")
 
                     // Upload to Supabase
-                    storage.from(JOB_IMAGES_BUCKET).upload(
-                        path = filePath,
-                        data = fileBytes,
+
+                    storage.from(JOB_IMAGES_BUCKET).upload(filePath, fileBytes) {
                         upsert = false
-                    )
+                    }
 
                     // Get public URL
                     val publicUrl = storage.from(JOB_IMAGES_BUCKET).publicUrl(filePath)
@@ -113,11 +112,10 @@ class SupabaseStorageHelper(private val context: Context) {
                         inputStream.readBytes()
                     } ?: throw Exception("Failed to read image file")
 
-                    storage.from(COMPLETION_IMAGES_BUCKET).upload(
-                        path = filePath,
-                        data = fileBytes,
+
+                    storage.from(JOB_IMAGES_BUCKET).upload(filePath, fileBytes) {
                         upsert = false
-                    )
+                    }
 
                     val publicUrl = storage.from(COMPLETION_IMAGES_BUCKET).publicUrl(filePath)
                     uploadedUrls.add(publicUrl)
@@ -150,11 +148,10 @@ class SupabaseStorageHelper(private val context: Context) {
                 inputStream.readBytes()
             } ?: throw Exception("Failed to read image file")
 
-            storage.from(PROFILE_IMAGES_BUCKET).upload(
-                path = filePath,
-                data = fileBytes,
-                upsert = true // Allow replacing existing profile image
-            )
+
+            storage.from(JOB_IMAGES_BUCKET).upload(filePath, fileBytes) {
+                upsert = false
+            }
 
             val publicUrl = storage.from(PROFILE_IMAGES_BUCKET).publicUrl(filePath)
 

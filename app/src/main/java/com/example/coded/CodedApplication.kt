@@ -9,6 +9,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
@@ -52,14 +53,15 @@ class CodedApplication : Application() {
         }
     }
 
+
+
     private fun initializeSupabase() {
         try {
             supabase = createSupabaseClient(
                 supabaseUrl = BuildConfig.SUPABASE_URL,
                 supabaseKey = BuildConfig.SUPABASE_ANON_KEY
             ) {
-                // Import the Auth module (formerly GoTrue)
-                install(io.github.jan.supabase.auth.Auth)
+                install(Auth)  // Changed from io.github.jan.supabase.auth.Auth
                 install(Postgrest)
                 install(Storage)
                 install(Realtime)

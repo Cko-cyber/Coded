@@ -18,7 +18,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coded.data.Job
-import com.example.coded.data.JobRepository
 import com.example.coded.ui.theme.*
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.CoroutineScope

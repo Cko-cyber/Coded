@@ -20,7 +20,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.coded.data.JobRepository
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*

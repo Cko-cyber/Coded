@@ -27,7 +27,7 @@ import com.example.coded.ui.theme.*
 import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
-import com.google.firebase.auth.FirebaseAuth
+
 
 @Composable
 fun SplashScreen(
