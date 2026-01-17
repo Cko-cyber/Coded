@@ -28,7 +28,6 @@ import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 
-
 @Composable
 fun SplashScreen(
     navController: NavController,
@@ -65,7 +64,8 @@ fun SplashScreen(
     LaunchedEffect(Unit) {
         delay(2500)
 
-        val currentUser = FirebaseAuth.getInstance().currentUser
+        // Check if user is logged in via Supabase
+        val currentUser = authRepository.currentUser.value
 
         if (currentUser != null) {
             navController.navigate("main_entry") {

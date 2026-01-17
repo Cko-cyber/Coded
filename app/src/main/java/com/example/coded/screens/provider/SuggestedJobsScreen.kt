@@ -17,14 +17,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.coded.data.Job
+import com.example.coded.data.supabase.Job
 import com.example.coded.ui.theme.*
-import com.google.firebase.Timestamp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import android.widget.Toast
+import com.example.coded.data.supabase.SupabaseJobRepository
 
 /**
  * Suggested Jobs Screen - Provider views available jobs from Firebase
@@ -36,7 +36,7 @@ fun SuggestedJobsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val jobRepository = remember { JobRepository(context) }
+    val jobRepository = remember { SupabaseJobRepository(context) }
 
     var selectedFilter by remember { mutableStateOf("ALL") }
     var availableJobs by remember { mutableStateOf<List<Job>>(emptyList()) }
@@ -178,7 +178,7 @@ fun SuggestedJobsScreen(
                         color = OasisMint.copy(alpha = 0.3f)
                     )
                     StatItem(
-                        value = "E${availableJobs.sumOf { it.totalAmount }.toInt()}",
+                        value = "E${availableJobs.sumOf { it.total_amount }.toInt()}",
                         label = "Total Value",
                         icon = Icons.Default.AttachMoney
                     )
@@ -187,7 +187,7 @@ fun SuggestedJobsScreen(
                         color = OasisMint.copy(alpha = 0.3f)
                     )
                     StatItem(
-                        value = availableJobs.count { it.isUrgent }.toString(),
+                        value = availableJobs.count { it.is_urgent }.toString(),
                         label = "Urgent",
                         icon = Icons.Default.Warning,
                         iconColor = Color(0xFFFF9800)
@@ -336,7 +336,7 @@ fun SuggestedJobsScreen(
                 // Apply filters
                 val filteredJobs = when (selectedFilter) {
                     "NEARBY" -> availableJobs.sortedBy { 0.0 } // Placeholder fix; update Job data class to add distanceFromProvider: Double? = null
-                    "HIGH_PAY" -> availableJobs.sortedByDescending { it.totalAmount }
+                    "HIGH_PAY" -> availableJobs.sortedByDescending { it.total_amount }
                     else -> availableJobs
                 }
 
@@ -428,7 +428,7 @@ fun JobCard(
                 )
 
                 Badge(
-                    containerColor = when (job.serviceType) {
+                    containerColor = when (job.service_type) {
                         "grass_cutting" -> Color(0xFF4CAF50)
                         "yard_clearing" -> Color(0xFF795548)
                         "gardening" -> Color(0xFF8BC34A)
@@ -441,7 +441,7 @@ fun JobCard(
                     contentColor = Color.White
                 ) {
                     Text(
-                        text = job.serviceType.replace("_", " ").uppercase(),
+                        text = job.service_type.replace("_", " ").uppercase(),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium
                     )
@@ -485,7 +485,7 @@ fun JobCard(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = job.clientName,
+                    text = job.client_name,
                     style = MaterialTheme.typography.bodySmall,
                     color = OasisDark
                 )
@@ -510,7 +510,7 @@ fun JobCard(
                         color = OasisGray
                     )
                     Text(
-                        text = "E${String.format("%.2f", job.totalAmount)}",
+                        text = "E${String.format("%.2f", job.total_amount)}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = OasisGreen
@@ -518,7 +518,7 @@ fun JobCard(
                 }
 
                 Text(
-                    text = formatTimeAgo(job.createdAt),
+                    text = formatTimeAgo(job.created_at),
                     style = MaterialTheme.typography.bodySmall,
                     color = OasisGray,
                     fontWeight = FontWeight.Medium
@@ -557,7 +557,7 @@ fun JobCard(
                     )
                 }
 
-                if (job.isUrgent) {
+                if (job.is_urgent) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.Warning,
@@ -581,7 +581,7 @@ fun JobCard(
 
 // Helper function to load jobs
 private fun loadAvailableJobs(
-    jobRepository: JobRepository,
+    jobRepository: SupabaseJobRepository,
     scope: CoroutineScope,
     onResult: (List<Job>) -> Unit
 ) {
@@ -613,9 +613,12 @@ private fun loadAvailableJobs(
 }
 
 // Helper function to format timestamp to "time ago"
-private fun formatTimeAgo(timestamp: Timestamp): String {
+private fun formatTimeAgo(timestamp: String?): String {
+    timestamp ?: return "Unknown"
+    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX", Locale.getDefault())
+    sdf.timeZone = TimeZone.getTimeZone("UTC")
+    val jobDate = try { sdf.parse(timestamp) ?: return "Unknown" } catch (e: Exception) { return "Unknown" }
     val now = Date()
-    val jobDate = timestamp.toDate()
     val diff = now.time - jobDate.time
 
     return when {
@@ -624,8 +627,8 @@ private fun formatTimeAgo(timestamp: Timestamp): String {
         diff < 86400000 -> "${diff / 3600000}h ago"
         diff < 604800000 -> "${diff / 86400000}d ago"
         else -> {
-            val sdf = SimpleDateFormat("dd MMM", Locale.getDefault())
-            sdf.format(jobDate)
+            val outputSdf = SimpleDateFormat("dd MMM", Locale.getDefault())
+            outputSdf.format(jobDate)
         }
     }
 }

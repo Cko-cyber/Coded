@@ -24,6 +24,7 @@ import com.example.coded.ui.theme.OasisGreenDark
 import com.example.coded.ui.theme.OasisGreenLight
 import com.example.coded.ui.theme.OasisGold
 import kotlin.random.Random
+import androidx.compose.foundation.BorderStroke
 
 @Composable
 fun OasisNavGraph(

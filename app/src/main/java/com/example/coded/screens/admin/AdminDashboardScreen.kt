@@ -1,5 +1,4 @@
 package com.example.coded.screens.admin
-
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -13,15 +12,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-
+import com.example.coded.data.supabase.SupabaseJobRepository
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminDashboardScreen(
     navController: NavController
 ) {
     val context = LocalContext.current
-    val jobRepository = remember { JobRepository(context) }
-
+    val jobRepository = remember { SupabaseJobRepository(context) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -53,7 +51,7 @@ fun AdminDashboardScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(16.dp)
         ) {
-            // Quick stats
+// Quick stats
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -79,8 +77,7 @@ fun AdminDashboardScreen(
                     )
                 }
             }
-
-            // Pending Actions
+// Pending Actions
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -118,8 +115,7 @@ fun AdminDashboardScreen(
                     }
                 }
             }
-
-            // Recent Activities
+// Recent Activities
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -155,8 +151,7 @@ fun AdminDashboardScreen(
                     }
                 }
             }
-
-            // System Health
+// System Health
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -195,7 +190,6 @@ fun AdminDashboardScreen(
         }
     }
 }
-
 @Composable
 fun StatCard(
     title: String,
@@ -233,7 +227,6 @@ fun StatCard(
         }
     }
 }
-
 @Composable
 fun ActivityItem(
     title: String,
@@ -275,7 +268,6 @@ fun ActivityItem(
         )
     }
 }
-
 @Composable
 fun HealthIndicator(
     label: String,

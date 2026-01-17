@@ -1,5 +1,4 @@
 package com.example.coded.screens.client
-
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -23,7 +22,7 @@ import androidx.navigation.NavController
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-
+import com.example.coded.data.supabase.SupabaseJobRepository
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaymentConfirmationScreen(
@@ -32,9 +31,9 @@ fun PaymentConfirmationScreen(
     totalAmount: Double
 ) {
     val context = LocalContext.current
-    val jobRepository = remember { JobRepository(context) }
+    val jobRepository = remember { SupabaseJobRepository(context) }
     val scope = rememberCoroutineScope()   // ✅ Add context
-    // State variables
+// State variables
     var isLoading by remember { mutableStateOf(false) }
     var paymentStatus by remember { mutableStateOf<String?>(null) }
     var paymentReference by remember { mutableStateOf("") }
@@ -43,30 +42,25 @@ fun PaymentConfirmationScreen(
     var errorMessage by remember { mutableStateOf("") }
     var mobileMoneyProvider by remember { mutableStateOf<String?>(null) }
     var mobileNumber by remember { mutableStateOf("") }
-
-    // Eswatini mobile money providers
+// Eswatini mobile money providers
     val mobileMoneyProviders = listOf(
         "mtn" to "📱 MTN Mobile Money",
         "eswatini_mobile" to "📱 Eswatini Mobile Money",
         "airtel" to "📱 Airtel Money"
     )
-
-    // Generate payment reference
+// Generate payment reference
     val paymentRef = remember {
-        "PAY${System.currentTimeMillis() % 1000000}${(100..999).random()}"
+        "PAY  {System.currentTimeMillis() % 1000000}  {(100..999).random()}"
     }
-
-    // Format date
+// Format date
     val formattedDate = remember {
         val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
         sdf.format(Date())
     }
-
-    // Format amount
+// Format amount
     val formattedAmount = remember {
         String.format("E%.2f", totalAmount)
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -89,7 +83,7 @@ fun PaymentConfirmationScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            // Payment Header with Eswatini flag
+// Payment Header with Eswatini flag
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -126,10 +120,8 @@ fun PaymentConfirmationScreen(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(20.dp))
-
-            // Payment Amount Card
+// Payment Amount Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -169,10 +161,8 @@ fun PaymentConfirmationScreen(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(20.dp))
-
-            // Mobile Money Provider Selection
+// Mobile Money Provider Selection
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -186,9 +176,7 @@ fun PaymentConfirmationScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2E7D32)
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
-
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -205,10 +193,8 @@ fun PaymentConfirmationScreen(
                             )
                         }
                     }
-
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    // Mobile Number Input
+// Mobile Number Input
                     androidx.compose.material3.OutlinedTextField(
                         value = mobileNumber,
                         onValueChange = { mobileNumber = it },
@@ -220,7 +206,6 @@ fun PaymentConfirmationScreen(
                             Icon(Icons.Default.Phone, contentDescription = "Phone")
                         }
                     )
-
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         "You'll receive a payment request on this number",
@@ -229,10 +214,8 @@ fun PaymentConfirmationScreen(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(20.dp))
-
-            // Payment Instructions
+// Payment Instructions
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -246,37 +229,29 @@ fun PaymentConfirmationScreen(
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1976D2)
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    // Step 1
+// Step 1
                     InstructionStep(
                         stepNumber = 1,
                         title = "Select your mobile money provider",
                         description = "Choose MTN, Eswatini Mobile, or Airtel"
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    // Step 2
+// Step 2
                     InstructionStep(
                         stepNumber = 2,
                         title = "Enter your mobile number",
                         description = "The number registered with your mobile money"
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    // Step 3
+// Step 3
                     InstructionStep(
                         stepNumber = 3,
                         title = "Click 'Request Payment'",
                         description = "We'll send a payment prompt to your phone"
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    // Step 4
+// Step 4
                     InstructionStep(
                         stepNumber = 4,
                         title = "Enter your PIN",
@@ -284,10 +259,8 @@ fun PaymentConfirmationScreen(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(20.dp))
-
-            // Important Notes for Eswatini
+// Important Notes for Eswatini
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -310,9 +283,7 @@ fun PaymentConfirmationScreen(
                             color = Color(0xFFF57C00)
                         )
                     }
-
                     Spacer(modifier = Modifier.height(12.dp))
-
                     Text(
                         "🇸🇿 Payment Reference: $paymentRef",
                         style = MaterialTheme.typography.bodySmall
@@ -344,14 +315,12 @@ fun PaymentConfirmationScreen(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(24.dp))
-
-            // Action Buttons
+// Action Buttons
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Request Payment Button
+// Request Payment Button
                 Button(
                     onClick = {
                         if (mobileMoneyProvider == null) {
@@ -366,27 +335,21 @@ fun PaymentConfirmationScreen(
                             showToast(context, "Please enter a valid mobile number")
                             return@Button
                         }
-
                         isLoading = true
-
-                        // Simulate mobile money payment request
+// Simulate mobile money payment request
                         scope.launch {
                             kotlinx.coroutines.delay(2000) // Simulate API call
-
-                            // In real app, integrate with mobile money API
-                            // For demo, simulate successful payment 80% of the time
+// In real app, integrate with mobile money API
+// For demo, simulate successful payment 80% of the time
                             val success = Random().nextFloat() < 0.8f
-
                             if (success) {
-                                // Update job payment status in Firestore
+// Update job payment status in Firestore
                                 val result = jobRepository.updateJobPayment(
                                     jobId = jobId,
                                     paymentStatus = "paid",
                                     transactionId = paymentRef,
-                                    paymentReference = paymentRef,
-                                    providerName = null // Will be assigned by admin
+                                    paymentReference = paymentRef
                                 )
-
                                 if (result.isSuccess) {
                                     paymentStatus = "paid"
                                     showSuccessDialog = true
@@ -428,8 +391,7 @@ fun PaymentConfirmationScreen(
                         }
                     }
                 }
-
-                // Manual Payment Button (if user already paid)
+// Manual Payment Button (if user already paid)
                 OutlinedButton(
                     onClick = {
                         paymentStatus = "manual"
@@ -443,8 +405,7 @@ fun PaymentConfirmationScreen(
                 ) {
                     Text("I've Already Paid (Enter Reference)")
                 }
-
-                // Cancel Button
+// Cancel Button
                 TextButton(
                     onClick = {
                         navController.popBackStack()
@@ -454,12 +415,10 @@ fun PaymentConfirmationScreen(
                     Text("Cancel Payment")
                 }
             }
-
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
-
-    // Manual Payment Dialog
+// Manual Payment Dialog
     if (paymentStatus == "manual") {
         AlertDialog(
             onDismissRequest = { paymentStatus = null },
@@ -489,8 +448,7 @@ fun PaymentConfirmationScreen(
                                     jobId = jobId,
                                     paymentStatus = "paid",
                                     transactionId = paymentRef,
-                                    paymentReference = paymentReference,
-                                    providerName = null
+                                    paymentReference = paymentReference
                                 )
                                 isLoading = false
                                 if (result.isSuccess) {
@@ -523,8 +481,7 @@ fun PaymentConfirmationScreen(
             }
         )
     }
-
-    // Success Dialog
+// Success Dialog
     if (showSuccessDialog) {
         AlertDialog(
             onDismissRequest = { showSuccessDialog = false },
@@ -571,7 +528,7 @@ fun PaymentConfirmationScreen(
                 Button(
                     onClick = {
                         showSuccessDialog = false
-                        // Navigate to job details or dashboard
+// Navigate to job details or dashboard
                         navController.navigate("job_details/$jobId") {
                             popUpTo("create_job") { inclusive = true }
                         }
@@ -585,8 +542,7 @@ fun PaymentConfirmationScreen(
             }
         )
     }
-
-    // Error Dialog
+// Error Dialog
     if (showErrorDialog) {
         AlertDialog(
             onDismissRequest = { showErrorDialog = false },
@@ -620,7 +576,6 @@ fun PaymentConfirmationScreen(
         )
     }
 }
-
 @Composable
 fun InstructionStep(
     stepNumber: Int,
@@ -659,7 +614,6 @@ fun InstructionStep(
         }
     }
 }
-
 private fun showToast(context: Context, message: String) {
     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 }

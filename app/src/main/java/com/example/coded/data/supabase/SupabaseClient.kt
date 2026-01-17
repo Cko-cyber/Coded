@@ -4,19 +4,29 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.OTP
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.storage.Storage
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import android.content.Context
 import com.example.coded.BuildConfig
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlin.time.Duration.Companion.hours
+import kotlinx.serialization.json.Json
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
+import io.github.jan.supabase.postgrest.query.Order
+
 
 // ============================================
 // SUPABASE CLIENT SETUP
@@ -286,9 +296,9 @@ class SupabaseAuthRepository(private val context: Context) {
         password: String
     ): Result<Provider> {
         return try {
-            supabase.auth.signInWith(io.github.jan.supabase.auth.providers.Phone) {
-                phone = "+268$phoneNumber"
-                this.password = password
+            // Use OTP for phone authentication
+            supabase.auth.signInWith(OTP) {
+                phone = phoneNumber
             }
 
             val userId = supabase.auth.currentUserOrNull()?.id ?: throw Exception("No user ID")
@@ -311,7 +321,7 @@ class SupabaseAuthRepository(private val context: Context) {
         password: String
     ): Result<Provider> {
         return try {
-            supabase.auth.signInWith(io.github.jan.supabase.auth.providers.Email) {
+            supabase.auth.signInWith(Email) {
                 this.email = email
                 this.password = password
             }
@@ -333,7 +343,7 @@ class SupabaseAuthRepository(private val context: Context) {
 
     suspend fun loginAdmin(email: String, password: String): Result<Profile> {
         return try {
-            supabase.auth.signInWith(io.github.jan.supabase.auth.providers.Email) {
+            supabase.auth.signInWith(Email) {
                 this.email = email
                 this.password = password
             }
@@ -356,7 +366,7 @@ class SupabaseAuthRepository(private val context: Context) {
 
     suspend fun changePassword(newPassword: String): Result<Unit> {
         return try {
-            supabase.auth.modifyUser {
+            supabase.auth.updateUser {
                 password = newPassword
             }
             Result.success(Unit)
@@ -381,9 +391,9 @@ class SupabaseAuthRepository(private val context: Context) {
     }
 
     private fun calculateExpiryDate(hours: Int): String {
-        val now = System.currentTimeMillis()
-        val expiry = now + (hours * 60 * 60 * 1000)
-        return Instant.fromEpochMilliseconds(expiry).toString()
+        val now = Clock.System.now()
+        val expiry = now.plus(hours.hours)
+        return expiry.toString()
     }
 }
 
@@ -391,7 +401,6 @@ class SupabaseAuthRepository(private val context: Context) {
 // JOB REPOSITORY
 // ============================================
 
-@OptIn(kotlin.time.ExperimentalTime::class)
 class SupabaseJobRepository(private val context: Context) {
     private val supabase = SupabaseClientManager.get()
 
@@ -430,7 +439,7 @@ class SupabaseJobRepository(private val context: Context) {
                     set("payment_status", paymentStatus)
                     set("transaction_id", transactionId)
                     set("payment_reference", paymentReference)
-                    set("paid_at", Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString())
+                    set("paid_at", Clock.System.now().toString())
                     set("status", "pending_assignment")
                 }) {
                     filter {
@@ -458,6 +467,11 @@ class SupabaseJobRepository(private val context: Context) {
                 .decodeList<JobSuggestion>()
 
             val jobIds = suggestions.map { it.job_id }
+
+            if (jobIds.isEmpty()) {
+                return Result.success(emptyList())
+            }
+
             val jobs = supabase.from("jobs")
                 .select() {
                     filter {
@@ -474,12 +488,13 @@ class SupabaseJobRepository(private val context: Context) {
     }
 
     fun listenToJobUpdates(jobId: String): Flow<Job> {
-        return supabase.channel("job_updates_$jobId") {
-            postgresChangeFlow<Job>(PostgresAction.All) {
+        return supabase.channel("job_updates_$jobId")
+            .postgresChangeFlow<PostgresAction.Update>(schema = "public") {
                 table = "jobs"
-                filter = "id=eq.$jobId"
+                filter("id", FilterOperator.EQ, jobId)
+            }.map { change ->
+                change.decodeRecord<Job>()
             }
-        }
     }
 
     suspend fun acceptJob(jobId: String, providerId: String): Result<Job> {
@@ -487,7 +502,7 @@ class SupabaseJobRepository(private val context: Context) {
             val updated = supabase.from("jobs")
                 .update({
                     set("status", "accepted")
-                    set("accepted_at", Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString())
+                    set("accepted_at", Clock.System.now().toString())
                 }) {
                     filter {
                         eq("id", jobId)
@@ -499,7 +514,7 @@ class SupabaseJobRepository(private val context: Context) {
             supabase.from("job_suggestions")
                 .update({
                     set("is_accepted", true)
-                    set("accepted_at", Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString())
+                    set("accepted_at", Clock.System.now().toString())
                 }) {
                     filter {
                         eq("job_id", jobId)
@@ -537,8 +552,8 @@ class SupabaseJobRepository(private val context: Context) {
                         else -> "leaking_tap"
                     },
                     title = "Test Job $i",
-                    description = "This is a test job",
-                    location_address = "Test Location $i",
+                    description = "This is a test job for provider testing",
+                    location_address = "Test Location $i, Manzini",
                     total_amount = (100 + i * 50).toDouble(),
                     payment_status = "paid",
                     status = "pending_assignment",
@@ -567,6 +582,173 @@ class SupabaseJobRepository(private val context: Context) {
                 .decodeList<Job>()
 
             Result.success(jobs)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAllJobs(): Result<List<Job>> {
+        return try {
+            val jobs = supabase.from("jobs")
+                .select()
+                .decodeList<Job>()
+
+            Result.success(jobs)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getJobById(jobId: String): Result<Job> {
+        return try {
+            val job = supabase.from("jobs")
+                .select() {
+                    filter {
+                        eq("id", jobId)
+                    }
+                }
+                .decodeSingle<Job>()
+
+            Result.success(job)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}
+
+// ============================================
+// PROVIDER REPOSITORY
+// ============================================
+
+class SupabaseProviderRepository(private val context: Context) {
+    private val supabase = SupabaseClientManager.get()
+
+    suspend fun getProviderById(providerId: String): Result<Provider> {
+        return try {
+            val provider = supabase.from("providers")
+                .select() {
+                    filter {
+                        eq("id", providerId)
+                    }
+                }
+                .decodeSingle<Provider>()
+
+            Result.success(provider)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateProviderLocation(
+        providerId: String,
+        location: String,
+        region: String,
+        town: String
+    ): Result<Provider> {
+        return try {
+            val updated = supabase.from("providers")
+                .update({
+                    set("location", location)
+                    set("region", region)
+                    set("town", town)
+                    set("last_location_update", Clock.System.now().toString())
+                }) {
+                    filter {
+                        eq("id", providerId)
+                    }
+                }
+                .decodeSingle<Provider>()
+
+            Result.success(updated)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateProviderAvailability(
+        providerId: String,
+        isAvailable: Boolean
+    ): Result<Provider> {
+        return try {
+            val updated = supabase.from("providers")
+                .update({
+                    set("is_available", isAvailable)
+                    set("last_active_at", Clock.System.now().toString())
+                }) {
+                    filter {
+                        eq("id", providerId)
+                    }
+                }
+                .decodeSingle<Provider>()
+
+            Result.success(updated)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}
+
+// ============================================
+// TRANSACTION REPOSITORY
+// ============================================
+
+class SupabaseTransactionRepository(private val context: Context) {
+    private val supabase = SupabaseClientManager.get()
+
+    suspend fun createTransaction(transaction: Transaction): Result<Transaction> {
+        return try {
+            val created = supabase.from("transactions")
+                .insert(transaction)
+                .decodeSingle<Transaction>()
+
+            Result.success(created)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getTransactionsForProvider(providerId: String): Result<List<Transaction>> {
+        return try {
+            val transactions = supabase.from("transactions")
+                .select() {
+                    filter {
+                        eq("provider_id", providerId)
+                    }
+                    order("created_at", Order.DESCENDING)
+
+                }
+                .decodeList<Transaction>()
+
+            Result.success(transactions)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateTransactionStatus(
+        transactionId: String,
+        status: String
+    ): Result<Transaction> {
+        return try {
+            val timestamp = Clock.System.now().toString()
+            val updateData = mutableMapOf<String, Any?>(
+                "status" to status
+            )
+            when (status) {
+                "processed" -> updateData["processed_at"] = timestamp
+                "completed" -> updateData["completed_at"] = timestamp
+                "paid_out" -> updateData["paid_out_at"] = timestamp
+            }
+
+            val updated = supabase.from("transactions")
+                .update(updateData) {
+                    filter {
+                        eq("id", transactionId)
+                    }
+                }
+                .decodeSingle<Transaction>()
+
+            Result.success(updated)
         } catch (e: Exception) {
             Result.failure(e)
         }
