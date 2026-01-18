@@ -9,7 +9,7 @@ import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.*
-
+import java.time.Instant
 /**
  * Repository for Job operations with Supabase
  */
@@ -74,7 +74,7 @@ class JobRepository(private val context: Context) {
                 "needs_disposal" to needsDisposal,
                 "is_urgent" to isUrgent,
                 "preferred_date" to preferredDate?.let {
-                    Instant.fromEpochMilliseconds(it.seconds * 1000).toString()
+                    Instant.ofEpochMilli(it.seconds * 1000).toString()
                 },
                 "base_price" to priceBreakdown.basePrice,
                 "vegetation_surcharge" to priceBreakdown.vegetationSurcharge,
@@ -94,8 +94,8 @@ class JobRepository(private val context: Context) {
                 "payment_status" to "pending",
                 "status" to "draft",
                 "image_urls" to imageUrls,
-                "created_at" to Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString(),
-                "updated_at" to Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString(),
+                "created_at" to Instant.ofEpochMilli(System.currentTimeMillis()).toString(),
+                "updated_at" to Instant.ofEpochMilli(System.currentTimeMillis()).toString(),
                 "is_test_job" to false
             )
 
@@ -125,9 +125,9 @@ class JobRepository(private val context: Context) {
                 set("payment_status", paymentStatus)
                 set("transaction_id", transactionId)
                 set("payment_reference", paymentReference)
-                set("paid_at", Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString())
+                set("paid_at", Instant.ofEpochMilli(System.currentTimeMillis()).toString())
                 set("status", "pending_assignment")
-                set("updated_at", Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString())
+                set("updated_at", Instant.ofEpochMilli(System.currentTimeMillis()).toString())
             }) {
                 filter {
                     eq("id", jobId)
@@ -206,8 +206,8 @@ class JobRepository(private val context: Context) {
                         1 -> "Manzini"
                         else -> "Matsapha"
                     },
-                    "created_at" to Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString(),
-                    "updated_at" to Instant.fromEpochMilliseconds(System.currentTimeMillis()).toString(),
+                    "created_at" to Instant.ofEpochMilli(System.currentTimeMillis()).toString(),
+                    "updated_at" to Instant.ofEpochMilli(System.currentTimeMillis()).toString(),
                     "is_test_job" to true,
                     "is_urgent" to (i % 2 == 0)
                 )
@@ -304,7 +304,7 @@ class JobRepository(private val context: Context) {
         if (isoString == null) return null
         return try {
             val instant = Instant.parse(isoString)
-            Timestamp(instant.epochSeconds, 0)
+            Timestamp(instant.epochSecond, 0)
         } catch (e: Exception) {
             null
         }
